@@ -1,0 +1,48 @@
+# ---- 数据与数据集（含报告原图与脱敏结果，不发布）----
+data/
+images/
+censored/
+medrepbench/
+upload_pack/
+gold/
+out/
+bj/
+artifacts*/
+*.zip
+
+# ---- 内部文档 ----
+docs/
+
+# ---- 评测中间产物（可由脚本重新生成）----
+predictions*.jsonl
+parse_report*.md
+vocab*.json
+course_ocr_items.json
+
+# ---- 临时调试输出 ----
+_*
+_raw_debug.txt
+
+# ---- Python ----
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+
+# ---- 模型权重 ----
+*.pdparams
+*.pdopt
+*.safetensors
+*.bin
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+
+# ---- 备份目录 ----
+_tools_backup/
