@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}确认导入 - 体检报告系统{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>确认导入</h1>
+  <p class="muted">
+    共 {{ total }} 个文件，{{ total_mb }} MB。确认后开始识别，不会立即出结果。
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="batch" value="{{ batch }}">
+
+    {% if groups %}
+    <h2>已识别工号</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>工号</th>
+          <th>页数</th>
+          <th>文件</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for emp, files in groups %}
+        <tr>
+          <td>{{ emp }}</td>
+          <td>{{ files|length }}</td>
+          <td class="muted">
+            {% for f in files %}{{ f.filename }}{% if not forloop.last %}、{% endif %}{% endfor %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {% if unmatched %}
+    <h2>需要指定工号</h2>
+    <p class="muted">
+      这些文件名里没有工号。现在填写就直接归入对应报告，
+      留空则转入待匹配页，稍后再处理。
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>文件名</th>
+          <th>大小</th>
+          <th>工号</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in unmatched %}
+        <tr>
+          <td>{{ f.filename }}</td>
+          <td class="muted">{{ f.size|filesizeformat }}</td>
+          <td><input type="text" name="emp_{{ f.id }}" placeholder="例如 E001"></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    <div class="pager">
+      <button type="submit" class="btn">确认导入</button>
+      <a class="btn secondary" href="{% url 'reports:report_list' %}">取消</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

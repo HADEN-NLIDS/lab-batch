@@ -245,3 +245,42 @@ class ExplanationSection(models.Model):
 
     def __str__(self):
         return '%s#%s' % (self.explanation_id, self.seq)
+
+
+class PendingFile(models.Model):
+    """上传暂存：已接收但尚未入库的图片。
+
+    上传分两步走。第一步只校验并落到暂存区，第二步用户确认后才建报告。
+    解析不出工号的文件也留在这里，等管理员指认受检者。
+    """
+
+    STATE_STAGED = 'staged'
+    STATE_UNMATCHED = 'unmatched'
+    STATE_CHOICES = [
+        (STATE_STAGED, '待确认'),
+        (STATE_UNMATCHED, '待指定工号'),
+    ]
+
+    tenant_id = models.BigIntegerField()
+    batch_id = models.CharField(max_length=32)
+    filename = models.CharField(max_length=128)
+    image_path = models.CharField(max_length=255)
+    employee_no = models.CharField(max_length=64, blank=True, default='')
+    size = models.IntegerField(default=0)
+    state = models.CharField(max_length=16, choices=STATE_CHOICES,
+                             default=STATE_STAGED)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'pending_file'
+        verbose_name = '待处理文件'
+        verbose_name_plural = '待处理文件'
+        indexes = [
+            models.Index(fields=['tenant_id', 'batch_id'],
+                         name='idx_pending_batch'),
+            models.Index(fields=['tenant_id', 'state'],
+                         name='idx_pending_state'),
+        ]
+
+    def __str__(self):
+        return '%s %s' % (self.filename, self.state)

@@ -11,7 +11,7 @@ from apps.accounts.models import User
 from apps.core.utils import (make_subject_key, open_image_stream,
                              parse_employee_no, read_file_bytes,
                              safe_extract_zip, validate_image)
-from apps.reports.models import Report, ReportPage, Subject
+from apps.reports.models import (PendingFile, Report, ReportPage, Subject)
 
 # 单次上传的文件数上限。所有图片都会读进内存，不设限时一次选几百张会吃满内存。
 MAX_UPLOAD_FILES = 200
@@ -102,25 +102,72 @@ def collect_files(image_files, zip_files):
     return collected, errors
 
 
-def handle_upload(image_files, zip_files, tenant):
-    """处理一次上传。
+def _create_report(tenant, emp, pages, errors, warnings):
+    """按工号建一份报告。pages 为 [(文件名, 图片相对路径)]。"""
+    if Report.objects.filter(tenant_id=tenant.id, report_no=emp,
+                             deleted_at__isnull=True).exists():
+        warnings.append('%s 的报告已存在，本次跳过' % emp)
+        return None
 
-    返回 dict：
-      created  已创建的报告数量
-      reports  创建的报告 id 列表
-      pending  解析不出工号的文件名，需人工匹配
-      errors   被拒绝的文件与原因
+    subject = _resolve_subject(tenant, emp)
+    # 同一工号的多张图按文件名排序作为多页
+    pages = sorted(pages, key=lambda x: x[0])
+    try:
+        with transaction.atomic():
+            report = Report.objects.create(
+                tenant_id=tenant.id,
+                subject=subject,
+                report_no=emp,
+                schema_version='1',
+                status=Report.STATUS_UPLOADED,
+            )
+            for idx, (name, rel_path) in enumerate(pages, 1):
+                ReportPage.objects.create(
+                    tenant_id=tenant.id,
+                    report=report,
+                    page_no=idx,
+                    image_path=rel_path,
+                )
+        from apps.pipeline.services import enqueue
+        enqueue(report, 'ocr')
+        return report
+    except Exception as e:
+        errors.append('%s：保存失败 %s' % (emp, str(e)[:60]))
+        return None
+
+
+def stage_upload(image_files, zip_files, tenant):
+    """第一步：校验并暂存，先不建报告。
+
+    文件落到 media，行写进 pending_file，等用户看过清单再确认。
     """
     collected, errors = collect_files(image_files, zip_files)
+    if not collected:
+        return {'batch': '', 'staged': 0, 'groups': [], 'unmatched': [],
+                'errors': errors, 'warnings': []}
 
+    batch = uuid.uuid4().hex[:16]
     groups = {}
-    pending = []
+    unmatched = []
     for name, data in collected:
         emp = parse_employee_no(name)
         if emp:
-            groups.setdefault(emp, []).append((name, data))
+            groups.setdefault(emp, []).append(name)
         else:
-            pending.append(name)
+            unmatched.append(name)
+
+        ext = os.path.splitext(name)[1].lower().lstrip('.')
+        rel_path = _save_image(data, ext, tenant.code)
+        PendingFile.objects.create(
+            tenant_id=tenant.id,
+            batch_id=batch,
+            filename=name[:128],
+            image_path=rel_path,
+            employee_no=emp or '',
+            size=len(data),
+            state=(PendingFile.STATE_STAGED if emp
+                   else PendingFile.STATE_UNMATCHED),
+        )
 
     warnings = []
     generic = sorted(e for e in groups if looks_like_generic_name(e))
@@ -130,46 +177,104 @@ def handle_upload(image_files, zip_files, tenant):
             '建议改名为「工号_姓名」后重新上传。'
             % '、'.join(generic[:5]))
 
-    created_ids = []
-    for emp, items in groups.items():
-        if Report.objects.filter(tenant_id=tenant.id, report_no=emp,
-                                 deleted_at__isnull=True).exists():
-            warnings.append('%s 的报告已存在，本次跳过' % emp)
-            continue
-        subject = _resolve_subject(tenant, emp)
-        # 同一工号的多张图按文件名排序作为多页
-        items.sort(key=lambda x: x[0])
-        try:
-            with transaction.atomic():
-                report = Report.objects.create(
-                    tenant_id=tenant.id,
-                    subject=subject,
-                    report_no=emp,
-                    schema_version='1',
-                    status=Report.STATUS_UPLOADED,
-                )
-                for idx, (name, data) in enumerate(items, 1):
-                    ext = os.path.splitext(name)[1].lower().lstrip('.')
-                    rel_path = _save_image(data, ext, tenant.code)
-                    ReportPage.objects.create(
-                        tenant_id=tenant.id,
-                        report=report,
-                        page_no=idx,
-                        image_path=rel_path,
-                    )
-                created_ids.append(report.id)
+    return {
+        'batch': batch,
+        'staged': len(collected),
+        'groups': [(e, len(n)) for e, n in sorted(groups.items())],
+        'unmatched': unmatched,
+        'errors': errors,
+        'warnings': warnings,
+    }
 
-                # 报告建好后入队，等待 worker 处理
-                from apps.pipeline.services import enqueue
-                enqueue(report, 'ocr')
-        except Exception as e:
-            errors.append('%s：保存失败 %s' % (emp, str(e)[:60]))
+
+def confirm_upload(batch_id, tenant, assignments=None):
+    """第二步：把暂存的文件入库。
+
+    assignments 是 {文件名: 工号}，用于给解析不出工号的文件人工指定。
+    没有工号也没有指定的文件保持 unmatched 状态，留给待匹配页处理。
+    """
+    assignments = assignments or {}
+    files = list(PendingFile.objects.filter(
+        tenant_id=tenant.id, batch_id=batch_id).order_by('filename'))
+    if not files:
+        return {'created': 0, 'reports': [], 'pending': [],
+                'errors': ['没有待确认的文件'], 'warnings': []}
+
+    errors, warnings = [], []
+    groups, kept = {}, []
+    for f in files:
+        emp = (assignments.get(f.filename) or f.employee_no or '').strip()
+        if emp:
+            groups.setdefault(emp, []).append((f.filename, f.image_path))
+        else:
+            kept.append(f)
+
+    created_ids = []
+    for emp, pages in groups.items():
+        report = _create_report(tenant, emp, pages, errors, warnings)
+        if report is not None:
+            created_ids.append(report.id)
+
+    done_ids = [f.id for f in files if f not in kept]
+    PendingFile.objects.filter(id__in=done_ids).delete()
 
     return {
         'created': len(created_ids),
         'reports': created_ids,
-        'pending': pending,
+        'pending': [f.filename for f in kept],
         'errors': errors,
         'warnings': warnings,
-        'total_files': len(collected),
     }
+
+
+def handle_upload(image_files, zip_files, tenant):
+    """一步完成上传与入库，供脚本命令行与测试使用。
+
+    页面走的是 stage_upload 加 confirm_upload 两步，中间能看到确认清单。
+    """
+    staged = stage_upload(image_files, zip_files, tenant)
+    if not staged['batch']:
+        return {'created': 0, 'reports': [], 'pending': [],
+                'errors': staged['errors'], 'warnings': staged['warnings'],
+                'total_files': 0}
+
+    result = confirm_upload(staged['batch'], tenant)
+    result['errors'] = staged['errors'] + result['errors']
+    result['warnings'] = staged['warnings'] + result['warnings']
+    result['pending'] = staged['unmatched']
+    result['total_files'] = staged['staged']
+    # 一步式调用不留暂存痕迹
+    PendingFile.objects.filter(
+        tenant_id=tenant.id, batch_id=staged['batch']).delete()
+    return result
+
+
+def assign_pending_file(pending, tenant, employee_no):
+    """给一个待匹配文件指定工号并入库。
+
+    该工号已有报告时追加为新的一页，否则新建报告。
+    返回 (成功, 错误说明)。
+    """
+    employee_no = (employee_no or '').strip()
+    if not employee_no:
+        return False, '工号不能为空'
+
+    report = Report.objects.filter(
+        tenant_id=tenant.id, report_no=employee_no,
+        deleted_at__isnull=True).first()
+
+    if report is None:
+        errors, warnings = [], []
+        report = _create_report(
+            tenant, employee_no, [(pending.filename, pending.image_path)],
+            errors, warnings)
+        if report is None:
+            return False, (errors or warnings or ['创建报告失败'])[0]
+    else:
+        ReportPage.objects.create(
+            tenant_id=tenant.id, report=report,
+            page_no=report.pages.count() + 1,
+            image_path=pending.image_path)
+
+    pending.delete()
+    return True, ''

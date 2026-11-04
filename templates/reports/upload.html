@@ -10,7 +10,8 @@
 <div class="card">
   <h1>批量上传</h1>
   <p class="muted">
-    也可直接上传 ZIP，包内按同样规则命名。
+    也可直接上传 ZIP，包内按同样规则命名。上传后先显示清单，
+    确认之前不会建报告，也不会开始识别。
   </p>
   <form method="post" enctype="multipart/form-data">
     {% csrf_token %}

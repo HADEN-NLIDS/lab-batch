@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}待匹配文件 - 体检报告系统{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-head">
+    <div class="card-head-main">
+      <h1>待匹配文件</h1>
+      <p class="muted">这些文件在文件名里解析不出工号，尚未入库。</p>
+    </div>
+    <a class="btn back-btn" href="{% url 'reports:report_list' %}">返回列表</a>
+  </div>
+
+  {% if files %}
+  <table>
+    <thead>
+      <tr>
+        <th>文件名</th>
+        <th>大小</th>
+        <th>上传时间</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in files %}
+      <tr>
+        <td>{{ f.filename }}</td>
+        <td class="muted">{{ f.size|filesizeformat }}</td>
+        <td class="muted">{{ f.created_at|date:"Y-m-d H:i" }}</td>
+        <td><a class="btn secondary" href="{% url 'reports:assign_pending' f.id %}">指定工号</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">没有待匹配的文件。</p>
+  {% endif %}
+</div>
+{% endblock %}

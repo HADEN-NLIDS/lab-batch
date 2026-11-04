@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from apps.reports.models import (Explanation, ExplanationSection, Item,
-                                 Report, ReportPage, Subject)
+                                 PendingFile, Report, ReportPage, Subject)
 
 
 class ReportPageInline(admin.TabularInline):
@@ -68,3 +68,12 @@ class ExplanationAdmin(admin.ModelAdmin):
     list_filter = ('tier', 'guard_status')
     date_hierarchy = 'created_at'
     inlines = [ExplanationSectionInline]
+
+
+@admin.register(PendingFile)
+class PendingFileAdmin(admin.ModelAdmin):
+    list_display = ('id', 'tenant_id', 'batch_id', 'filename', 'employee_no',
+                    'state', 'size', 'created_at')
+    list_filter = ('state',)
+    search_fields = ('filename', 'employee_no')
+    date_hierarchy = 'created_at'

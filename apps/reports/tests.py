@@ -12,8 +12,9 @@ from PIL import Image
 from apps.accounts.models import User
 from apps.core.models import Organization
 from apps.core.utils import parse_employee_no
-from apps.reports.models import Report, ReportPage, Subject
-from apps.reports.services import handle_upload
+from apps.reports.models import PendingFile, Report, ReportPage, Subject
+from apps.reports.services import (assign_pending_file, confirm_upload,
+                                   handle_upload, stage_upload)
 
 
 def make_image(color, fmt='JPEG'):
@@ -257,3 +258,93 @@ class ViewPermissionTest(TestCase):
         self.client.force_login(self.emp_a)
         resp = self.client.get('/reports/%d/' % self.report_a.id)
         self.assertEqual(resp.status_code, 404)
+
+
+class TwoStepUploadTest(TestCase):
+    """两步上传：暂存不建报告，确认后才入库。"""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.media_override = override_settings(MEDIA_ROOT=self.tmpdir)
+        self.media_override.enable()
+        self.org = Organization.objects.create(name='测试企业', code='t2')
+
+    def tearDown(self):
+        self.media_override.disable()
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_stage_does_not_create_report(self):
+        staged = stage_upload([upload_file('E100_张三.jpg')], [], self.org)
+
+        self.assertTrue(staged['batch'])
+        self.assertEqual(staged['staged'], 1)
+        self.assertEqual(
+            Report.objects.filter(tenant_id=self.org.id).count(), 0)
+        self.assertEqual(PendingFile.objects.count(), 1)
+
+    def test_confirm_creates_report(self):
+        staged = stage_upload([upload_file('E100_张三.jpg')], [], self.org)
+        result = confirm_upload(staged['batch'], self.org)
+
+        self.assertEqual(result['created'], 1)
+        report = Report.objects.get(tenant_id=self.org.id, report_no='E100')
+        self.assertEqual(report.pages.count(), 1)
+        self.assertEqual(PendingFile.objects.count(), 0)
+
+    def test_unmatched_file_stays_pending(self):
+        staged = stage_upload([upload_file('扫描件.jpg')], [], self.org)
+        result = confirm_upload(staged['batch'], self.org)
+
+        self.assertEqual(result['created'], 0)
+        self.assertEqual(result['pending'], ['扫描件.jpg'])
+        self.assertEqual(PendingFile.objects.filter(
+            state=PendingFile.STATE_UNMATCHED).count(), 1)
+
+    def test_employee_no_can_be_given_at_confirm(self):
+        staged = stage_upload([upload_file('扫描件.jpg')], [], self.org)
+        pending = PendingFile.objects.get()
+        result = confirm_upload(staged['batch'], self.org,
+                                {pending.filename: 'E200'})
+
+        self.assertEqual(result['created'], 1)
+        self.assertTrue(Report.objects.filter(
+            tenant_id=self.org.id, report_no='E200').exists())
+
+    def test_assign_creates_new_report(self):
+        stage_upload([upload_file('扫描件.jpg')], [], self.org)
+        pending = PendingFile.objects.get()
+
+        ok, err = assign_pending_file(pending, self.org, 'E300')
+
+        self.assertTrue(ok, err)
+        self.assertTrue(Report.objects.filter(
+            tenant_id=self.org.id, report_no='E300').exists())
+        self.assertEqual(PendingFile.objects.count(), 0)
+
+    def test_assign_appends_page_to_existing_report(self):
+        stage_upload([upload_file('E400_张三.jpg')], [], self.org)
+        staged = PendingFile.objects.get(employee_no='E400')
+        confirm_upload(staged.batch_id, self.org)
+
+        stage_upload([upload_file('扫描件2.jpg')], [], self.org)
+        pending = PendingFile.objects.get(employee_no='')
+        ok, err = assign_pending_file(pending, self.org, 'E400')
+
+        self.assertTrue(ok, err)
+        report = Report.objects.get(tenant_id=self.org.id, report_no='E400')
+        self.assertEqual(report.pages.count(), 2)
+
+    def test_purge_removes_expired_staged(self):
+        from datetime import timedelta
+        from io import StringIO
+
+        from django.core.management import call_command
+        from django.utils import timezone
+
+        stage_upload([upload_file('E500_张三.jpg')], [], self.org)
+        PendingFile.objects.update(
+            created_at=timezone.now() - timedelta(hours=48))
+
+        call_command('purge_staged', hours=24, stdout=StringIO())
+
+        self.assertEqual(PendingFile.objects.count(), 0)

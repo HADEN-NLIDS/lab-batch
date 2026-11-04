@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}指定工号 - 体检报告系统{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-head">
+    <div class="card-head-main">
+      <h1>指定工号</h1>
+      <p class="muted">
+        文件：{{ file.filename }}（{{ file.size|filesizeformat }}）
+      </p>
+    </div>
+    <a class="btn back-btn" href="{% url 'reports:upload_pending' %}">返回待匹配</a>
+  </div>
+
+  <p class="muted">
+    填写工号后，该文件会归入这个工号的报告。已有报告时追加为新的一页，
+    没有则新建一份。工号只能包含字母与数字。
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+    <label for="id_employee_no">工号</label>
+    <input type="text" name="employee_no" id="id_employee_no"
+           placeholder="例如 E001" autofocus required>
+    <div class="pager">
+      <button type="submit" class="btn">确定</button>
+      <a class="btn secondary" href="{% url 'reports:upload_pending' %}">取消</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

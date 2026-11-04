@@ -1,4 +1,5 @@
 import os
+import re
 
 from django.conf import settings
 from django.contrib import messages
@@ -7,10 +8,12 @@ from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from apps.reports.forms import UploadForm
-from apps.reports.models import Report
-from apps.reports.services import handle_upload
+from apps.reports.models import PendingFile, Report
+from apps.reports.services import (assign_pending_file, confirm_upload,
+                                   stage_upload)
 
 PAGE_SIZE = 20
 
@@ -145,34 +148,113 @@ def report_image(request, pk, page_no):
 
 @login_required
 def upload(request):
-    """批量上传。仅管理层与运维可用。"""
+    """批量上传第一步：接收文件并暂存。"""
     if not _can_manage(request.user):
         raise PermissionDenied('无权上传报告')
 
     if request.method == 'POST':
         form = UploadForm(request.POST, request.FILES)
         if form.is_valid():
-            result = handle_upload(
+            staged = stage_upload(
                 form.cleaned_data['image_list'],
                 form.cleaned_data['archive_list'],
                 request.tenant,
             )
-            if result['created']:
-                messages.success(
-                    request,
-                    '已创建 %d 份报告，共 %d 个文件'
-                    % (result['created'], result['total_files']))
-            if result['pending']:
-                messages.warning(
-                    request,
-                    '以下文件未能解析出工号，需人工匹配：%s'
-                    % '、'.join(result['pending'][:10]))
-            for warn in result['warnings']:
-                messages.warning(request, warn)
-            for err in result['errors'][:10]:
+            for err in staged['errors'][:10]:
                 messages.error(request, err)
-            return redirect('reports:report_list')
+            for warn in staged['warnings']:
+                messages.warning(request, warn)
+            if not staged['batch']:
+                return redirect('reports:upload')
+            return redirect('%s?batch=%s' % (
+                reverse('reports:upload_confirm'), staged['batch']))
     else:
         form = UploadForm()
 
     return render(request, 'reports/upload.html', {'form': form})
+
+
+@login_required
+def upload_confirm(request):
+    """批量上传第二步：显示待导入清单，确认后才建报告。"""
+    if not _can_manage(request.user):
+        raise PermissionDenied('无权上传报告')
+
+    batch = request.GET.get('batch') or request.POST.get('batch') or ''
+    files = list(PendingFile.objects.filter(
+        tenant_id=request.tenant.id, batch_id=batch).order_by('filename'))
+    if not files:
+        messages.warning(request, '这批文件已处理或不存在')
+        return redirect('reports:report_list')
+
+    if request.method == 'POST':
+        assignments = {}
+        for f in files:
+            value = request.POST.get('emp_%d' % f.id, '').strip()
+            if value:
+                assignments[f.filename] = value
+        result = confirm_upload(batch, request.tenant, assignments)
+
+        if result['created']:
+            messages.success(request, '已创建 %d 份报告' % result['created'])
+        if result['pending']:
+            messages.warning(
+                request,
+                '还有 %d 个文件没有工号，已转入待匹配' % len(result['pending']))
+        for warn in result['warnings']:
+            messages.warning(request, warn)
+        for err in result['errors'][:10]:
+            messages.error(request, err)
+        return redirect('reports:report_list')
+
+    groups = {}
+    unmatched = []
+    for f in files:
+        if f.employee_no:
+            groups.setdefault(f.employee_no, []).append(f)
+        else:
+            unmatched.append(f)
+
+    return render(request, 'reports/upload_confirm.html', {
+        'batch': batch,
+        'groups': sorted(groups.items()),
+        'unmatched': unmatched,
+        'total': len(files),
+        'total_mb': round(sum(f.size for f in files) / 1024.0 / 1024.0, 1),
+    })
+
+
+@login_required
+def upload_pending(request):
+    """待匹配：列出解析不出工号、尚未入库的文件。"""
+    if not _can_manage(request.user):
+        raise PermissionDenied('无权处理待匹配文件')
+
+    files = PendingFile.objects.filter(
+        tenant_id=request.tenant.id,
+        state=PendingFile.STATE_UNMATCHED).order_by('-created_at')
+
+    return render(request, 'reports/pending_list.html', {'files': files})
+
+
+@login_required
+def assign_pending(request, pk):
+    """给一个待匹配文件指定工号并入库。"""
+    if not _can_manage(request.user):
+        raise PermissionDenied('无权处理待匹配文件')
+
+    pending = get_object_or_404(
+        PendingFile, pk=pk, tenant_id=request.tenant.id)
+
+    if request.method == 'POST':
+        emp = request.POST.get('employee_no', '').strip()
+        if not re.match(r'^[A-Za-z0-9]+$', emp or ''):
+            messages.error(request, '工号只能是字母与数字')
+        else:
+            ok, err = assign_pending_file(pending, request.tenant, emp)
+            if ok:
+                messages.success(request, '已归入工号 %s 的报告' % emp)
+                return redirect('reports:upload_pending')
+            messages.error(request, err)
+
+    return render(request, 'reports/pending_assign.html', {'file': pending})
