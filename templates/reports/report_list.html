@@ -18,7 +18,7 @@
   <table>
     <thead>
       <tr>
-        <th>报告号</th>
+        <th>{% if is_employee %}报告号{% else %}报告{% endif %}</th>
         <th>日期</th>
         <th>页数</th>
         <th>状态</th>
@@ -29,7 +29,7 @@
     <tbody>
       {% for r in reports %}
       <tr>
-        <td>{{ r.report_no|default:"-" }}</td>
+        <td>{% if is_employee %}{{ r.report_no|default:"-" }}{% else %}#{{ r.id }}{% endif %}</td>
         <td>{{ r.report_date|date:"Y-m-d"|default:"-" }}</td>
         <td>{{ r.pages.all|length }}</td>
         <td>

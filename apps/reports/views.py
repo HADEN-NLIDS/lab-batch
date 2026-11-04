@@ -15,9 +15,14 @@ from apps.reports.services import handle_upload
 PAGE_SIZE = 20
 
 
-def _should_see_all(user):
-    """管理层与运维可看本租户全部，员工只能看本人。"""
+def _can_manage(user):
+    """管理层与运维：可上传、重新处理、看任务状态与群体统计。"""
     return user.role in ('manager', 'admin')
+
+
+def _personal_only(user):
+    """只有受检员工本人能看到报告的具体内容。"""
+    return user.role == 'employee'
 
 
 @login_required
@@ -27,7 +32,7 @@ def report_list(request):
 
     qs = Report.objects.filter(tenant_id=request.tenant.id,
                                deleted_at__isnull=True)
-    if not _should_see_all(request.user):
+    if _personal_only(request.user):
         if request.user.subject_id is None:
             # 常见于建账号时漏绑体检人，空列表看不出原因
             messages.warning(request, '账号尚未绑定体检记录，请联系管理员')
@@ -45,7 +50,7 @@ def report_list(request):
     return render(request, 'reports/report_list.html', {
         'page': page,
         'reports': page.object_list,
-        'is_employee': not _should_see_all(request.user),
+        'is_employee': _personal_only(request.user),
         'running': running,
         'failed': failed,
     })
@@ -57,24 +62,35 @@ def report_detail(request, pk):
         Report, pk=pk, tenant_id=request.tenant.id,
         deleted_at__isnull=True)
 
-    if not _should_see_all(request.user) and \
-            report.subject_id != request.user.subject_id:
-        raise PermissionDenied('无权查看该报告')
+    if _personal_only(request.user):
+        if report.subject_id != request.user.subject_id:
+            raise PermissionDenied('无权查看该报告')
+        return render(request, 'reports/report_detail.html', {
+            'report': report,
+            'pages': report.pages.order_by('page_no'),
+            'items': report.items.order_by('seq'),
+            'explanation': report.explanations.order_by('-created_at').first(),
+            'tasks': report.tasks.order_by('-created_at')[:8],
+            'can_reprocess': False,
+        })
 
-    return render(request, 'reports/report_detail.html', {
+    # 管理层与运维只能看到处理状态与数量，不得查看具体指标与解读
+    items = report.items.all()
+    return render(request, 'reports/report_meta.html', {
         'report': report,
-        'pages': report.pages.order_by('page_no'),
-        'items': report.items.order_by('seq'),
-        'explanation': report.explanations.order_by('-created_at').first(),
         'tasks': report.tasks.order_by('-created_at')[:8],
-        'can_reprocess': _should_see_all(request.user),
+        'n_items': items.count(),
+        'n_abnormal': items.filter(flag='abnormal').count(),
+        'n_unknown': items.filter(flag='unknown').count(),
+        'n_graded': items.exclude(severity__isnull=True).count(),
+        'can_reprocess': True,
     })
 
 
 @login_required
 def reprocess(request, pk):
     """重新排队处理一份报告。仅管理层与运维可用，只接受 POST。"""
-    if not _should_see_all(request.user):
+    if not _can_manage(request.user):
         raise PermissionDenied('无权重新处理')
 
     report = get_object_or_404(
@@ -101,13 +117,19 @@ def reprocess(request, pk):
 
 @login_required
 def report_image(request, pk, page_no):
-    """原图下载。不通过 MEDIA_URL 直接暴露，必须先校验归属。"""
+    """原图下载。不通过 MEDIA_URL 直接暴露，必须先校验归属。
+
+    只有受检员工本人能取自己的原图。管理层与运维即使能进报告页，
+    也不得拿到报告影像。
+    """
+    if not _personal_only(request.user):
+        raise PermissionDenied('管理层与运维不得查看报告原图')
+
     report = get_object_or_404(
         Report, pk=pk, tenant_id=request.tenant.id,
         deleted_at__isnull=True)
 
-    if not _should_see_all(request.user) and \
-            report.subject_id != request.user.subject_id:
+    if report.subject_id != request.user.subject_id:
         raise PermissionDenied('无权查看该报告')
 
     page = report.pages.filter(page_no=page_no).first()
@@ -124,7 +146,7 @@ def report_image(request, pk, page_no):
 @login_required
 def upload(request):
     """批量上传。仅管理层与运维可用。"""
-    if not _should_see_all(request.user):
+    if not _can_manage(request.user):
         raise PermissionDenied('无权上传报告')
 
     if request.method == 'POST':

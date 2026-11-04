@@ -218,11 +218,37 @@ class ViewPermissionTest(TestCase):
         resp = self.client.get('/reports/upload/')
         self.assertEqual(resp.status_code, 200)
 
-    def test_manager_sees_all_reports(self):
+    def test_manager_list_hides_employee_no(self):
         self.client.force_login(self.manager)
         resp = self.client.get('/reports/')
-        self.assertContains(resp, 'A001')
-        self.assertContains(resp, 'B001')
+
+        self.assertEqual(resp.status_code, 200)
+        # 管理层能看到报告条目，但看不到工号
+        self.assertNotContains(resp, 'A001')
+        self.assertNotContains(resp, 'B001')
+        self.assertContains(resp, '#%d' % self.report_a.id)
+
+    def test_manager_detail_shows_counts_only(self):
+        from apps.reports.models import Item
+        Item.objects.create(
+            tenant_id=self.org.id, report=self.report_a, seq=1,
+            name_raw='白细胞计数', name_key='白细胞计数',
+            value_raw='4.65', flag='normal')
+
+        self.client.force_login(self.manager)
+        resp = self.client.get('/reports/%d/' % self.report_a.id)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, '指标概况')
+        self.assertNotContains(resp, '白细胞计数')
+        self.assertNotContains(resp, '4.65')
+
+    def test_manager_cannot_download_image(self):
+        self.client.force_login(self.manager)
+        resp = self.client.get(
+            '/reports/%d/page/1/image/' % self.report_a.id)
+
+        self.assertEqual(resp.status_code, 403)
 
     def test_deleted_report_is_hidden(self):
         from django.utils import timezone

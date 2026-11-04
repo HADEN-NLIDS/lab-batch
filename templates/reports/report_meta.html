@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}报告状态 - 体检报告系统{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-head">
+    <div class="card-head-main">
+      <h1>报告 #{{ report.id }}</h1>
+      <p class="muted">
+        状态：{{ report.get_status_display }}
+        上传时间：{{ report.created_at|date:"Y-m-d H:i" }}
+      </p>
+    </div>
+    <a class="btn back-btn" href="{% url 'reports:report_list' %}">返回列表</a>
+  </div>
+  <p class="muted">
+    管理层与运维只能查看处理状态与数量统计。具体指标、解读与原图仅受检者本人可见。
+  </p>
+  {% if can_reprocess %}
+  <form method="post" action="{% url 'reports:reprocess' report.id %}" class="inline-form">
+    {% csrf_token %}
+    <button type="submit" class="btn secondary"
+            onclick="return confirm('重新处理会覆盖现有指标与解读，确定继续？')">
+      重新处理
+    </button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>处理进度</h2>
+  {% if tasks %}
+  <table>
+    <thead>
+      <tr>
+        <th>环节</th>
+        <th>状态</th>
+        <th>尝试</th>
+        <th>开始</th>
+        <th>结束</th>
+        <th>说明</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tasks %}
+      <tr>
+        <td>{{ t.get_task_type_display }}</td>
+        <td>
+          {% if t.status == "done" %}
+            <span class="tag ok">{{ t.get_status_display }}</span>
+          {% elif t.status == "failed" %}
+            <span class="tag abnormal">{{ t.get_status_display }}</span>
+          {% elif t.status == "running" %}
+            <span class="tag running">{{ t.get_status_display }}</span>
+          {% else %}
+            <span class="tag">{{ t.get_status_display }}</span>
+          {% endif %}
+        </td>
+        <td>{{ t.attempts }} / {{ t.max_attempts }}</td>
+        <td>{{ t.started_at|date:"H:i:s"|default:"-" }}</td>
+        <td>{{ t.finished_at|date:"H:i:s"|default:"-" }}</td>
+        <td class="muted">{{ t.error_msg|default:"-"|truncatechars:60 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">尚未进入队列。确认 worker 已启动：python manage.py run_worker</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>指标概况</h2>
+  <table>
+    <tbody>
+      <tr>
+        <th>项目总数</th>
+        <td>{{ n_items }}</td>
+      </tr>
+      <tr>
+        <th>判定异常</th>
+        <td>{{ n_abnormal }}</td>
+      </tr>
+      <tr>
+        <th>无法判断</th>
+        <td>{{ n_unknown }}</td>
+      </tr>
+      <tr>
+        <th>已分级</th>
+        <td>{{ n_graded }}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
