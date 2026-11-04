@@ -16,36 +16,36 @@ import json
 import time
 import argparse
 
-sys.stdout.reconfigure(encoding='utf-8')
+sys.stdout.reconfigure(encoding="utf-8")
 
-os.environ.setdefault('PADDLE_XCCL_BACKEND', 'iluvatar_gpu')
-os.environ.setdefault('PADDLE_DEVICE', 'iluvatar_gpu')
-os.environ.setdefault('PADDLE_PDX_MODEL_SOURCE', 'aistudio')
-
-DEVICE = os.environ['PADDLE_DEVICE']
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ocr_env import DEVICE, MODEL_SOURCE  # noqa: E402
 
 
 def parse_args():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--images', required=True, help='逗号分隔的图片路径')
-    ap.add_argument('--out', required=True, help='输出 jsonl')
-    ap.add_argument('--tag', default='w', help='日志前缀')
+    ap.add_argument("--images", required=True, help="逗号分隔的图片路径")
+    ap.add_argument("--out", required=True, help="输出 jsonl")
+    ap.add_argument("--tag", default="w", help="日志前缀")
     return ap.parse_args()
 
 
 def main():
     args = parse_args()
-    imgs = [x for x in args.images.split(',') if x.strip()]
+    imgs = [x for x in args.images.split(",") if x.strip()]
     if not imgs:
-        print('没有图片')
+        print("没有图片")
         return 1
 
-    print('[%s] %d 张图，加载模型 (device=%s)...'
-          % (args.tag, len(imgs), DEVICE), flush=True)
+    print(
+        "[%s] %d 张图，加载模型 (device=%s)..." % (args.tag, len(imgs), DEVICE),
+        flush=True,
+    )
     t0 = time.time()
     from paddleocr import PaddleOCRVL
+
     pipe = PaddleOCRVL(device=DEVICE)
-    print('[%s] 加载完成 %.1fs' % (args.tag, time.time() - t0), flush=True)
+    print("[%s] 加载完成 %.1fs" % (args.tag, time.time() - t0), flush=True)
 
     records = []
     for i, img in enumerate(imgs, 1):
@@ -53,29 +53,49 @@ def main():
         try:
             out = list(pipe.predict(img))
             dt = time.time() - t1
-            rec = {'image': os.path.basename(img), 'ok': True,
-                   'dt': round(dt, 2), 'n': len(out)}
-            print('[%s] %d/%d %-44s %.1fs OK'
-                  % (args.tag, i, len(imgs), os.path.basename(img)[:44], dt),
-                  flush=True)
+            rec = {
+                "image": os.path.basename(img),
+                "ok": True,
+                "dt": round(dt, 2),
+                "n": len(out),
+            }
+            print(
+                "[%s] %d/%d %-44s %.1fs OK"
+                % (args.tag, i, len(imgs), os.path.basename(img)[:44], dt),
+                flush=True,
+            )
         except Exception as e:
             dt = time.time() - t1
-            rec = {'image': os.path.basename(img), 'ok': False,
-                   'dt': round(dt, 2),
-                   'err': '%s: %s' % (type(e).__name__, str(e)[:200])}
-            print('[%s] %d/%d %-44s %.1fs %s'
-                  % (args.tag, i, len(imgs), os.path.basename(img)[:44], dt,
-                     rec['err'][:60]), flush=True)
+            rec = {
+                "image": os.path.basename(img),
+                "ok": False,
+                "dt": round(dt, 2),
+                "err": "%s: %s" % (type(e).__name__, str(e)[:200]),
+            }
+            print(
+                "[%s] %d/%d %-44s %.1fs %s"
+                % (
+                    args.tag,
+                    i,
+                    len(imgs),
+                    os.path.basename(img)[:44],
+                    dt,
+                    rec["err"][:60],
+                ),
+                flush=True,
+            )
         records.append(rec)
         # 每张都落盘，主进程可以随时读
-        with open(args.out, 'w', encoding='utf-8') as fp:
+        with open(args.out, "w", encoding="utf-8") as fp:
             for r in records:
-                fp.write(json.dumps(r, ensure_ascii=False) + '\n')
+                fp.write(json.dumps(r, ensure_ascii=False) + "\n")
 
-    print('[%s] 完成 %d 张，总耗时 %.1fs'
-          % (args.tag, len(records), time.time() - t0), flush=True)
+    print(
+        "[%s] 完成 %d 张，总耗时 %.1fs" % (args.tag, len(records), time.time() - t0),
+        flush=True,
+    )
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

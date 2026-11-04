@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}群体统计 - 体检报告系统{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>群体统计</h1>
+  <p class="muted">
+    按部门汇总异常情况。人数少于 {{ threshold }} 人的分组不予展示，
+    以避免通过小样本反推个体。
+  </p>
+
+  <h2>全体</h2>
+  {% if overall.suppressed %}
+    <p class="muted">员工总数不足 {{ threshold }} 人，暂不展示统计。</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr><th>员工数</th><th>有异常报告人数</th><th>异常率</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ overall.total }}</td>
+          <td>{{ overall.abnormal }}</td>
+          <td>{{ overall.rate }}%</td>
+        </tr>
+      </tbody>
+    </table>
+  {% endif %}
+
+  <h2>按部门</h2>
+  {% if rows %}
+  <table>
+    <thead>
+      <tr><th>部门</th><th>员工数</th><th>有异常报告人数</th><th>异常率</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.department }}</td>
+        {% if r.suppressed %}
+          <td colspan="3" class="muted">样本不足 {{ threshold }} 人，不予展示</td>
+        {% else %}
+          <td>{{ r.total }}</td>
+          <td>{{ r.abnormal }}</td>
+          <td>{{ r.rate }}%</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">暂无已填写部门的员工。</p>
+  {% endif %}
+</div>
+{% endblock %}

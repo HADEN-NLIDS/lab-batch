@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}报告列表 - 体检报告系统{% endblock %}
+{% block content %}
+{% if running %}
+<div class="msg warning">
+  还有 {{ running }} 份在处理中，本页每 10 秒自动刷新。
+</div>
+{% endif %}
+{% if failed %}
+<div class="msg error">
+  {{ failed }} 份处理失败，进入详情可查看原因。
+</div>
+{% endif %}
+
+<div class="card">
+  <h1>{% if is_employee %}我的报告{% else %}全部报告{% endif %}</h1>
+  {% if reports %}
+  <table>
+    <thead>
+      <tr>
+        <th>报告号</th>
+        <th>日期</th>
+        <th>页数</th>
+        <th>状态</th>
+        <th>上传时间</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in reports %}
+      <tr>
+        <td>{{ r.report_no|default:"-" }}</td>
+        <td>{{ r.report_date|date:"Y-m-d"|default:"-" }}</td>
+        <td>{{ r.pages.all|length }}</td>
+        <td>
+          {% if r.status == "done" %}
+            <span class="tag ok">{{ r.get_status_display }}</span>
+          {% elif r.status == "failed" %}
+            <span class="tag abnormal">{{ r.get_status_display }}</span>
+          {% elif r.status == "processing" %}
+            <span class="tag running">{{ r.get_status_display }}</span>
+          {% else %}
+            <span class="tag">{{ r.get_status_display }}</span>
+          {% endif %}
+        </td>
+        <td>{{ r.created_at|date:"Y-m-d H:i" }}</td>
+        <td><a class="btn secondary" href="{% url 'reports:report_detail' r.id %}">查看</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if page.paginator.num_pages > 1 %}
+  <div class="pager">
+    {% if page.has_previous %}
+      <a class="btn secondary" href="?page={{ page.previous_page_number }}">上一页</a>
+    {% endif %}
+    <span class="muted">第 {{ page.number }} / {{ page.paginator.num_pages }} 页，共 {{ page.paginator.count }} 份</span>
+    {% if page.has_next %}
+      <a class="btn secondary" href="?page={{ page.next_page_number }}">下一页</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <p class="muted">暂无报告。</p>
+  {% endif %}
+</div>
+
+{% if running %}
+<script>
+  setTimeout(function () { location.reload(); }, 10000);
+</script>
+{% endif %}
+{% endblock %}

@@ -17,17 +17,17 @@ import json
 import base64
 import argparse
 
-sys.stdout.reconfigure(encoding='utf-8')
+sys.stdout.reconfigure(encoding="utf-8")
 
 
 def parse_args():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--src', default=r'<图片目录>')
-    ap.add_argument('--out-dir', default=r'<数据目录>\标注工具')
+    ap.add_argument("--src", default=r"<图片目录>")
+    ap.add_argument("--out-dir", default=r"<数据目录>\标注工具")
     return ap.parse_args()
 
 
-HTML_TMPL = r'''<!DOCTYPE html>
+HTML_TMPL = r"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -255,49 +255,54 @@ window.addEventListener('resize', () => { const t = cv.width; cv.width = t; redr
 </script>
 </body>
 </html>
-'''
+"""
 
 
 def main():
     args = parse_args()
-    files = sorted([f for f in glob.glob(os.path.join(args.src, '*'))
-                    if os.path.isfile(f) and f.lower().endswith(('.png', '.jpg', '.jpeg'))])
+    files = sorted(
+        [
+            f
+            for f in glob.glob(os.path.join(args.src, "*"))
+            if os.path.isfile(f) and f.lower().endswith((".png", ".jpg", ".jpeg"))
+        ]
+    )
     if not files:
-        print(f'{args.src} 下没有图片')
+        print(f"{args.src} 下没有图片")
         sys.exit(1)
 
-    print(f'读取 {len(files)} 张图片...')
+    print(f"读取 {len(files)} 张图片...")
     images = []
     for f in files:
-        with open(f, 'rb') as fp:
-            b64 = base64.b64encode(fp.read()).decode('ascii')
-        images.append({'name': os.path.basename(f), 'b64': b64})
-        print(f'  {os.path.basename(f)}  {len(b64)//1024} KB (base64)')
+        with open(f, "rb") as fp:
+            b64 = base64.b64encode(fp.read()).decode("ascii")
+        images.append({"name": os.path.basename(f), "b64": b64})
+        print(f"  {os.path.basename(f)}  {len(b64)//1024} KB (base64)")
 
     os.makedirs(args.out_dir, exist_ok=True)
-    os.makedirs(os.path.join(args.out_dir, 'output'), exist_ok=True)
+    os.makedirs(os.path.join(args.out_dir, "output"), exist_ok=True)
 
-    html = HTML_TMPL.replace('__IMAGES__', json.dumps(images, ensure_ascii=False))
-    out = os.path.join(args.out_dir, 'annotator.html')
-    with open(out, 'w', encoding='utf-8') as f:
+    html = HTML_TMPL.replace("__IMAGES__", json.dumps(images, ensure_ascii=False))
+    out = os.path.join(args.out_dir, "annotator.html")
+    with open(out, "w", encoding="utf-8") as f:
         f.write(html)
 
     size_mb = os.path.getsize(out) / 1024 / 1024
     print()
-    print('=' * 56)
-    print('标注工具已生成')
-    print('=' * 56)
-    print(f'  {out}  ({size_mb:.1f} MB)')
+    print("=" * 56)
+    print("标注工具已生成")
+    print("=" * 56)
+    print(f"  {out}  ({size_mb:.1f} MB)")
     print()
-    print('使用方法：')
-    print('  1. 双击用 Chrome/Edge 打开（文件较大，首次加载稍慢）')
-    print('  2. 在图上拖拽框选个人信息区域（姓名/身份证/电话/地址/条形码）')
-    print('  3. 右侧逐项填写检验项目')
+    print("使用方法：")
+    print("  1. 双击用 Chrome/Edge 打开（文件较大，首次加载稍慢）")
+    print("  2. 在图上拖拽框选个人信息区域（姓名/身份证/电话/地址/条形码）")
+    print("  3. 右侧逐项填写检验项目")
     print('  4. 点"保存本张"，浏览器下载 脱敏图 + 标注JSON')
     print(f'  5. 把下载的文件移到 {os.path.join(args.out_dir, "output")}')
     print()
-    print('注意：这是本地HTML，图片不会上传到任何服务器。')
+    print("注意：这是本地HTML，图片不会上传到任何服务器。")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

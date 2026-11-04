@@ -19,16 +19,16 @@ import base64
 import argparse
 import importlib.util
 
-sys.stdout.reconfigure(encoding='utf-8')
+sys.stdout.reconfigure(encoding="utf-8")
 
 
 def load_parser():
     """动态导入 04_parse_predictions.py 里的解析函数（文件名带数字，不能直接import）"""
     here = os.path.dirname(os.path.abspath(__file__))
-    path = os.path.join(here, '04_parse_predictions.py')
+    path = os.path.join(here, "04_parse_predictions.py")
     if not os.path.isfile(path):
         return None
-    spec = importlib.util.spec_from_file_location('p04', path)
+    spec = importlib.util.spec_from_file_location("p04", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -36,9 +36,9 @@ def load_parser():
 
 def parse_args():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--artifacts', default=r'<数据目录>\artifacts')
-    ap.add_argument('--images', default=r'<图片目录>')
-    ap.add_argument('--out-dir', default=r'<数据目录>\标注工具')
+    ap.add_argument("--artifacts", default=r"<数据目录>\artifacts")
+    ap.add_argument("--images", default=r"<图片目录>")
+    ap.add_argument("--out-dir", default=r"<数据目录>\标注工具")
     return ap.parse_args()
 
 
@@ -46,14 +46,14 @@ def build_preitems(artifacts_dir, images_dir, parser):
     """返回 {图片basename: [items]}，只包含能匹配上的。"""
     # 1. 收集 artifacts 里的 image -> items
     by_image = {}
-    for f in sorted(glob.glob(os.path.join(artifacts_dir, '*.json'))):
-        if os.path.basename(f).startswith('_'):
+    for f in sorted(glob.glob(os.path.join(artifacts_dir, "*.json"))):
+        if os.path.basename(f).startswith("_"):
             continue
         try:
-            rec = json.load(open(f, encoding='utf-8'))
+            rec = json.load(open(f, encoding="utf-8"))
         except Exception:
             continue
-        img = rec.get('image', '')
+        img = rec.get("image", "")
         if not img:
             continue
         items = []
@@ -64,7 +64,7 @@ def build_preitems(artifacts_dir, images_dir, parser):
                     for row in tb:
                         items.extend(parser.extract_row_items(row))
             except Exception as e:
-                print(f'  解析 {img} 失败: {e}')
+                print(f"  解析 {img} 失败: {e}")
         by_image[img] = items
 
     # 2. 与图片目录匹配（按文件名，忽略扩展名差异）
@@ -73,10 +73,10 @@ def build_preitems(artifacts_dir, images_dir, parser):
         stem_map[os.path.splitext(img)[0]] = items
 
     result = {}
-    for f in sorted(glob.glob(os.path.join(images_dir, '*'))):
+    for f in sorted(glob.glob(os.path.join(images_dir, "*"))):
         if not os.path.isfile(f):
             continue
-        if not f.lower().endswith(('.png', '.jpg', '.jpeg')):
+        if not f.lower().endswith((".png", ".jpg", ".jpeg")):
             continue
         name = os.path.basename(f)
         stem = os.path.splitext(name)[0]
@@ -84,7 +84,7 @@ def build_preitems(artifacts_dir, images_dir, parser):
     return result
 
 
-HTML_HEAD = r'''<!DOCTYPE html>
+HTML_HEAD = r"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -264,61 +264,77 @@ loadImage();
 </script>
 </body>
 </html>
-'''
+"""
 
 
 def main():
     args = parse_args()
-    imgs = sorted([f for f in glob.glob(os.path.join(args.images, '*'))
-                   if os.path.isfile(f) and f.lower().endswith(('.png', '.jpg', '.jpeg'))])
+    imgs = sorted(
+        [
+            f
+            for f in glob.glob(os.path.join(args.images, "*"))
+            if os.path.isfile(f) and f.lower().endswith((".png", ".jpg", ".jpeg"))
+        ]
+    )
     if not imgs:
-        print(f'{args.images} 下没有图片')
+        print(f"{args.images} 下没有图片")
         sys.exit(1)
 
     parser = load_parser()
     if parser is None:
-        print('!! 找不到 04_parse_predictions.py，将生成空白表格')
+        print("!! 找不到 04_parse_predictions.py，将生成空白表格")
     preitems = build_preitems(args.artifacts, args.images, parser)
 
     hit = sum(1 for v in preitems.values() if v)
-    print(f'图片 {len(imgs)} 张，其中 {hit} 张有预填结果')
+    print(f"图片 {len(imgs)} 张，其中 {hit} 张有预填结果")
     for name, items in preitems.items():
-        print(f'  {name}: {len(items)} 项' + ('' if items else '  （无OCR结果，空白表格）'))
+        print(
+            f"  {name}: {len(items)} 项"
+            + ("" if items else "  （无OCR结果，空白表格）")
+        )
     if hit == 0:
         print()
-        print('!! 没有任何预填结果。需要先对这批图跑 OCR：')
-        print('   AI Studio: python tools/03_export_ocr.py --gold-dir gold --src . --out-dir artifacts')
-        print('   或本地（有GPU时）: $env:PADDLE_DEVICE="gpu"; python tools\\03_export_ocr.py ...')
-        print('   然后把 artifacts 下载回来，重跑本脚本')
+        print("!! 没有任何预填结果。需要先对这批图跑 OCR：")
+        print(
+            "   AI Studio: python tools/03_export_ocr.py --gold-dir gold --src . --out-dir artifacts"
+        )
+        print(
+            '   或本地（有GPU时）: python tools\\03_export_ocr.py ...（设备自动检测）'
+        )
+        print("   然后把 artifacts 下载回来，重跑本脚本")
 
     images = []
     for f in imgs:
-        with open(f, 'rb') as fp:
-            images.append({'name': os.path.basename(f),
-                           'b64': base64.b64encode(fp.read()).decode('ascii')})
+        with open(f, "rb") as fp:
+            images.append(
+                {
+                    "name": os.path.basename(f),
+                    "b64": base64.b64encode(fp.read()).decode("ascii"),
+                }
+            )
 
     os.makedirs(args.out_dir, exist_ok=True)
-    os.makedirs(os.path.join(args.out_dir, 'output'), exist_ok=True)
+    os.makedirs(os.path.join(args.out_dir, "output"), exist_ok=True)
 
-    html = HTML_HEAD.replace('__IMAGES__', json.dumps(images, ensure_ascii=False))
-    html = html.replace('__PREITEMS__', json.dumps(preitems, ensure_ascii=False))
-    out = os.path.join(args.out_dir, 'preannotate.html')
-    with open(out, 'w', encoding='utf-8') as f:
+    html = HTML_HEAD.replace("__IMAGES__", json.dumps(images, ensure_ascii=False))
+    html = html.replace("__PREITEMS__", json.dumps(preitems, ensure_ascii=False))
+    out = os.path.join(args.out_dir, "preannotate.html")
+    with open(out, "w", encoding="utf-8") as f:
         f.write(html)
 
     print()
-    print('=' * 58)
-    print('预标注工具已生成')
-    print('=' * 58)
-    print(f'  {out}  ({os.path.getsize(out)/1024/1024:.1f} MB)')
+    print("=" * 58)
+    print("预标注工具已生成")
+    print("=" * 58)
+    print(f"  {out}  ({os.path.getsize(out)/1024/1024:.1f} MB)")
     print()
-    print('用法：')
-    print('  1. 浏览器打开，逐张核对识别结果（橙色行是可疑项）')
-    print('  2. 改错、补漏、删多余')
+    print("用法：")
+    print("  1. 浏览器打开，逐张核对识别结果（橙色行是可疑项）")
+    print("  2. 改错、补漏、删多余")
     print('  3. 点"保存本张并下一张"，下载 脱敏图 + 标注JSON')
-    print('  4. 把下载的文件移到 标注工具\\output\\')
-    print('  5. 跑 python tools\\23_gold_from_annotation.py 生成 gold')
+    print("  4. 把下载的文件移到 标注工具\\output\\")
+    print("  5. 跑 python tools\\23_gold_from_annotation.py 生成 gold")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

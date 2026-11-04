@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}知情同意 - 体检报告系统{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>知情同意书</h1>
+  <p class="muted">版本 {{ version }}</p>
+
+  <div style="white-space: pre-wrap; line-height: 1.9;">
+本系统用于企业内部体检报告的识别、结构化与结果说明，帮助您理解报告中的指标含义。签署前请阅读以下内容。
+
+一、处理目的
+将您提交的体检报告图片转换为结构化数据，按参考范围判断指标是否异常，并生成供参考的通俗说明。
+
+二、处理范围
+报告图片、指标名称、数值、单位、参考范围与判定结果。数据在企业管理的内网服务器内处理，不上传至公网。
+
+三、您的权利
+1. 可随时查看本人的报告与说明。
+2. 可要求更正识别错误的指标。
+3. 可撤回本次授权，撤回后系统不再处理您的新报告；已处理的记录按企业规定保留或删除。
+4. 系统仅作健康信息整理，不提供诊断结论，不替代医生面诊。
+
+四、说明
+输出内容仅供健康科普参考，不构成诊断，不能替代医生面诊。如有异常或身体不适，请及时就医。
+  </div>
+
+  <form method="post" style="margin-top: 20px;">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    {% if already %}
+      <p class="muted">您已签署过本版本同意书。</p>
+      <a class="btn" href="{{ next }}">继续</a>
+    {% else %}
+      <button type="submit" class="btn">我已阅读并同意</button>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

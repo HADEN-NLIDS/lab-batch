@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}登录 - 体检报告系统{% endblock %}
+{% block content %}
+<div class="login-box card">
+  <h1>登录</h1>
+  {% if form.errors %}
+    <div class="msg error">用户名或密码不正确</div>
+  {% endif %}
+  <form method="post" action="{% url 'login' %}">
+    {% csrf_token %}
+    <label for="id_username">用户名</label>
+    <input type="text" name="username" id="id_username" autofocus required>
+    <label for="id_password">密码</label>
+    <input type="password" name="password" id="id_password" required>
+    <input type="hidden" name="next" value="{{ next }}">
+    <button type="submit" class="btn">登录</button>
+  </form>
+</div>
+{% endblock %}

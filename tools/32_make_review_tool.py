@@ -24,39 +24,57 @@ import argparse
 import importlib.util
 from datetime import datetime
 
-sys.stdout.reconfigure(encoding='utf-8')
+sys.stdout.reconfigure(encoding="utf-8")
 
 MAX_WIDTH_DEFAULT = 2000
-IMG_EXT = ('.png', '.jpg', '.jpeg')
+IMG_EXT = (".png", ".jpg", ".jpeg")
 # 原图与脱敏图/标注文件的命名常常不一致（'xxx.png' vs 'xxx_masked.png'），
 # 匹配前统一剥掉这些后缀，否则一张都配不上。
-SUFFIX_RE = re.compile(r'(_masked|_annot|_已脱敏|_脱敏)$', re.I)
+SUFFIX_RE = re.compile(r"(_masked|_annot|_已脱敏|_脱敏)$", re.I)
 
 
 def norm_stem(s):
-    return SUFFIX_RE.sub('', s or '')
+    return SUFFIX_RE.sub("", s or "")
 
 
 def parse_args():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--predictions', default='',
-                    help='04 或 31 的输出 jsonl（推荐用 31 的，带 is_abnormal）')
-    ap.add_argument('--artifacts', default='',
-                    help='兼容旧流程：直接给 OCR artifacts 目录，现解析（无 flag 预填）')
-    ap.add_argument('--images', required=True)
-    ap.add_argument('--out-dir', default=r'<数据目录>\标注工具')
-    ap.add_argument('--resume-from', default='', help='上次导出的 JSON，用来恢复已完成状态')
-    ap.add_argument('--keep-flags-from', default='',
-                    help='上次导出的 JSON：值用新解析结果，flag 沿用人工标注，'
-                         '并标出哪些行的值被修正过（解析器修好后用这个）')
-    ap.add_argument('--fix-conflicts', action='store_true',
-                    help='把"与参考区间矛盾"的旧标注直接改成按区间的结果，'
-                         '并打印改了哪几项（换新值之后旧标注站不住时用）')
-    ap.add_argument('--limit', type=int, default=0, help='本批最多几张，0=全部')
-    ap.add_argument('--batch', type=int, default=0, help='第几批（从0开始）')
-    ap.add_argument('--max-width', type=int, default=MAX_WIDTH_DEFAULT,
-                    help='图片压缩到该宽度，0=不压缩')
-    ap.add_argument('--out-name', default='', help='输出文件名，默认 review_tool.html')
+    ap.add_argument(
+        "--predictions",
+        default="",
+        help="04 或 31 的输出 jsonl（推荐用 31 的，带 is_abnormal）",
+    )
+    ap.add_argument(
+        "--artifacts",
+        default="",
+        help="兼容旧流程：直接给 OCR artifacts 目录，现解析（无 flag 预填）",
+    )
+    ap.add_argument("--images", required=True)
+    ap.add_argument("--out-dir", default=r"<数据目录>\标注工具")
+    ap.add_argument(
+        "--resume-from", default="", help="上次导出的 JSON，用来恢复已完成状态"
+    )
+    ap.add_argument(
+        "--keep-flags-from",
+        default="",
+        help="上次导出的 JSON：值用新解析结果，flag 沿用人工标注，"
+        "并标出哪些行的值被修正过（解析器修好后用这个）",
+    )
+    ap.add_argument(
+        "--fix-conflicts",
+        action="store_true",
+        help='把"与参考区间矛盾"的旧标注直接改成按区间的结果，'
+        "并打印改了哪几项（换新值之后旧标注站不住时用）",
+    )
+    ap.add_argument("--limit", type=int, default=0, help="本批最多几张，0=全部")
+    ap.add_argument("--batch", type=int, default=0, help="第几批（从0开始）")
+    ap.add_argument(
+        "--max-width",
+        type=int,
+        default=MAX_WIDTH_DEFAULT,
+        help="图片压缩到该宽度，0=不压缩",
+    )
+    ap.add_argument("--out-name", default="", help="输出文件名，默认 review_tool.html")
     return ap.parse_args()
 
 
@@ -74,12 +92,12 @@ def load_module(fname, modname):
 def items_from_predictions(path):
     """返回 {图片名: [item]}，item 里带 is_abnormal / abnormal_reason。"""
     out = {}
-    with open(path, encoding='utf-8') as f:
+    with open(path, encoding="utf-8") as f:
         for line in f:
             if not line.strip():
                 continue
             o = json.loads(line)
-            out[o.get('image', '')] = o.get('items') or []
+            out[o.get("image", "")] = o.get("items") or []
     return out
 
 
@@ -87,25 +105,24 @@ def items_from_artifacts(artifacts_dir, parser_mod):
     out = {}
     if not os.path.isdir(artifacts_dir) or parser_mod is None:
         return out
-    for f in sorted(glob.glob(os.path.join(artifacts_dir, '*.json'))):
-        if os.path.basename(f).startswith('_'):
+    for f in sorted(glob.glob(os.path.join(artifacts_dir, "*.json"))):
+        if os.path.basename(f).startswith("_"):
             continue
         try:
-            rec = json.load(open(f, encoding='utf-8'))
+            rec = json.load(open(f, encoding="utf-8"))
         except (ValueError, OSError):
             continue
-        img = rec.get('image', '')
+        img = rec.get("image", "")
         if not img:
             continue
         items = []
         try:
-            tables = parser_mod.extract_tables(
-                parser_mod.get_html_sources(rec))
+            tables = parser_mod.extract_tables(parser_mod.get_html_sources(rec))
             for tb in tables:
                 for row in tb:
                     items.extend(parser_mod.extract_row_items(row))
         except Exception as e:
-            print('  解析 %s 失败: %s' % (img, e))
+            print("  解析 %s 失败: %s" % (img, e))
         out[img] = items
     return out
 
@@ -117,10 +134,10 @@ def nn(s):
     '红细胞分布宽度 (RDW-SD)' 和 '(RDW-CV)' 去掉括号后键会撞车，
     后一个把前一个覆盖掉，结果误报"值被修正"。
     """
-    s = '' if s is None else str(s)
-    s = s.replace('（', '(').replace('）', ')')
-    s = re.sub(r'^[\s\*＊★☆#＃]+', '', s)
-    return re.sub(r'\s+', '', s).lower()
+    s = "" if s is None else str(s)
+    s = s.replace("（", "(").replace("）", ")")
+    s = re.sub(r"^[\s\*＊★☆#＃]+", "", s)
+    return re.sub(r"\s+", "", s).lower()
 
 
 def load_prev(path):
@@ -132,20 +149,20 @@ def load_prev(path):
     if not path or not os.path.isfile(path):
         return {}
     try:
-        d = json.load(open(path, encoding='utf-8'))
+        d = json.load(open(path, encoding="utf-8"))
     except (ValueError, OSError) as e:
-        print('  读取上次标注失败: %s' % e)
+        print("  读取上次标注失败: %s" % e)
         return {}
     out = {}
-    for s in d.get('samples') or []:
-        rid = s.get('report_id') or ''
-        for x in s.get('items') or []:
-            out[(rid, nn(x.get('name')))] = {
-                'flag': (x.get('flag') or '').strip(),
-                'value': (x.get('value') or '').strip(),
+    for s in d.get("samples") or []:
+        rid = s.get("report_id") or ""
+        for x in s.get("items") or []:
+            out[(rid, nn(x.get("name")))] = {
+                "flag": (x.get("flag") or "").strip(),
+                "value": (x.get("value") or "").strip(),
             }
-    n_flag = sum(1 for v in out.values() if v['flag'] in ('normal', 'abnormal'))
-    print('  上次标注 %d 项，其中已判定 %d 项' % (len(out), n_flag))
+    n_flag = sum(1 for v in out.values() if v["flag"] in ("normal", "abnormal"))
+    print("  上次标注 %d 项，其中已判定 %d 项" % (len(out), n_flag))
     return out
 
 
@@ -156,24 +173,26 @@ def _judge_mod():
     """惰性加载 31_judge_abnormal.py，用于"标注 vs 区间"一致性检查。"""
     global _J31
     if _J31 is None:
-        _J31 = load_module('31_judge_abnormal.py', 'j31_for32') or False
+        _J31 = load_module("31_judge_abnormal.py", "j31_for32") or False
     return _J31 or None
 
 
 def _num_eq(a, b):
     """数值口径相等（'19' == '19.0'），非数值则按字符串比。"""
+
     def f(x):
         try:
-            return float(str(x).strip().lstrip('<>\u2264\u2265\uff1c\uff1e'))
+            return float(str(x).strip().lstrip("<>\u2264\u2265\uff1c\uff1e"))
         except (TypeError, ValueError):
             return None
+
     fa, fb = f(a), f(b)
     if fa is not None and fb is not None:
         return fa == fb
-    return str(a or '').strip() == str(b or '').strip()
+    return str(a or "").strip() == str(b or "").strip()
 
 
-def to_review_item(it, rid='', prev=None):
+def to_review_item(it, rid="", prev=None):
     """把预测项转成复核工具要的行结构。
 
     flag 初始值策略（"预标注"的核心）：
@@ -182,51 +201,54 @@ def to_review_item(it, rid='', prev=None):
       低置信/拒判   → 留空并标色，人工必须自己判断
     """
     prev = prev or {}
-    name = (it.get('item_name') or '').strip()
-    value = (it.get('item_value') or '').strip()
-    flag = (it.get('is_abnormal') or '').strip()
-    conf = (it.get('abnormal_confidence') or '').strip()
-    reason = (it.get('abnormal_reason') or '').strip()
+    name = (it.get("item_name") or "").strip()
+    value = (it.get("item_value") or "").strip()
+    flag = (it.get("is_abnormal") or "").strip()
+    conf = (it.get("abnormal_confidence") or "").strip()
+    reason = (it.get("abnormal_reason") or "").strip()
 
     old = prev.get((rid, nn(name))) if rid else None
-    merged = bool(old and old.get('flag') in ('normal', 'abnormal'))
+    merged = bool(old and old.get("flag") in ("normal", "abnormal"))
     # 只有**数值真的变了**才算"值被修正"。
     # '19' vs '19.0'、'0.2' vs '0.20' 只是格式差异，标出来只是噪音。
-    changed = bool(merged and not _num_eq(old.get('value'), value))
+    changed = bool(merged and not _num_eq(old.get("value"), value))
 
     # 一致性检查：人工标的 flag 与"按参考区间算出来"的结果矛盾时标出来。
     # 值被解析器修正之后，旧的标注可能就站不住了（'血糖 0.8' 改成 '4.37' 之后
     # 从异常变正常），但人未必会回头重看。这里主动提示，免得 gold 里留下
     # 与数据自相矛盾的标注。
     conflict = False
-    auto = ''
+    auto = ""
     if merged:
         j31 = _judge_mod()
         if j31 is not None:
-            v = j31.judge(value, (it.get('item_range') or '').strip())
-            auto = v['flag'] if v['flag'] in ('normal', 'abnormal') else ''
-            if auto and auto != old['flag']:
+            v = j31.judge(value, (it.get("item_range") or "").strip())
+            auto = v["flag"] if v["flag"] in ("normal", "abnormal") else ""
+            if auto and auto != old["flag"]:
                 conflict = True
 
-    prefill = old['flag'] if merged else (
-        flag if (flag in ('normal', 'abnormal') and conf == 'high') else '')
+    prefill = (
+        old["flag"]
+        if merged
+        else (flag if (flag in ("normal", "abnormal") and conf == "high") else "")
+    )
     return {
-        'name': name,
-        'value': value,
-        'unit': (it.get('item_unit') or '').strip(),
-        'range': (it.get('item_range') or '').strip(),
-        'flag': prefill,
-        'judged': flag,
-        'conf': conf,
-        'reason': reason,
+        "name": name,
+        "value": value,
+        "unit": (it.get("item_unit") or "").strip(),
+        "range": (it.get("item_range") or "").strip(),
+        "flag": prefill,
+        "judged": flag,
+        "conf": conf,
+        "reason": reason,
         # 派生指标会带一句人话说明（'BMI 20.4 正常（18.5-23.9）'）
-        'note': (it.get('abnormal_note') or '').strip(),
+        "note": (it.get("abnormal_note") or "").strip(),
         # 沿用痕迹：值被修正过的行要人工重看，因为旧 flag 是按旧值判的
-        'merged': merged,
-        'changed': changed,
-        'old_value': (old.get('value') or '') if old else '',
-        'conflict': conflict,
-        'auto': auto,
+        "merged": merged,
+        "changed": changed,
+        "old_value": (old.get("value") or "") if old else "",
+        "conflict": conflict,
+        "auto": auto,
     }
 
 
@@ -240,20 +262,21 @@ def encode_image(path, max_width):
         try:
             from PIL import Image
             import io
+
             im = Image.open(path)
             if im.width > max_width:
                 h = int(im.height * max_width / im.width)
-                im = im.convert('RGB').resize((max_width, h), Image.LANCZOS)
+                im = im.convert("RGB").resize((max_width, h), Image.LANCZOS)
             buf = io.BytesIO()
-            im.save(buf, format='JPEG', quality=92)
-            return base64.b64encode(buf.getvalue()).decode('ascii'), 'image/jpeg'
+            im.save(buf, format="JPEG", quality=92)
+            return base64.b64encode(buf.getvalue()).decode("ascii"), "image/jpeg"
         except Exception as e:
-            print('  压缩 %s 失败（用原图）: %s' % (os.path.basename(path), e))
-    with open(path, 'rb') as fp:
+            print("  压缩 %s 失败（用原图）: %s" % (os.path.basename(path), e))
+    with open(path, "rb") as fp:
         data = fp.read()
     ext = os.path.splitext(path)[1].lower()
-    mime = 'image/jpeg' if ext in ('.jpg', '.jpeg') else 'image/png'
-    return base64.b64encode(data).decode('ascii'), mime
+    mime = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png"
+    return base64.b64encode(data).decode("ascii"), mime
 
 
 def normalize_resume(sample):
@@ -262,26 +285,28 @@ def normalize_resume(sample):
     导出时字段叫 range_raw（为的是跟 23_gold_from_annotation 对齐），
     工具内部叫 range。不转的话续标恢复后"参考范围"整列都是空的。
     """
-    items = sample.get('items')
+    items = sample.get("items")
     if not isinstance(items, list):
         items = []
     out_items = []
     for x in items:
-        out_items.append({
-            'name': x.get('name') or '',
-            'value': x.get('value') or '',
-            'unit': x.get('unit') or '',
-            'range': x.get('range_raw') or x.get('range') or '',
-            'flag': x.get('flag') or '',
-            'judged': x.get('rule_judged') or x.get('judged') or '',
-            'conf': x.get('rule_conf') or x.get('conf') or '',
-            'reason': x.get('reason') or '',
-        })
+        out_items.append(
+            {
+                "name": x.get("name") or "",
+                "value": x.get("value") or "",
+                "unit": x.get("unit") or "",
+                "range": x.get("range_raw") or x.get("range") or "",
+                "flag": x.get("flag") or "",
+                "judged": x.get("rule_judged") or x.get("judged") or "",
+                "conf": x.get("rule_conf") or x.get("conf") or "",
+                "reason": x.get("reason") or "",
+            }
+        )
     return {
-        'items': out_items,
-        'masks': sample.get('masks') or [],
-        '_done': bool(sample.get('_done')),
-        '_skip': bool(sample.get('_skip')),
+        "items": out_items,
+        "masks": sample.get("masks") or [],
+        "_done": bool(sample.get("_done")),
+        "_skip": bool(sample.get("_skip")),
     }
 
 
@@ -290,18 +315,18 @@ def load_resume(path):
     if not path or not os.path.isfile(path):
         return {}
     try:
-        d = json.load(open(path, encoding='utf-8'))
+        d = json.load(open(path, encoding="utf-8"))
     except (ValueError, OSError) as e:
-        print('  读取续标文件失败: %s' % e)
+        print("  读取续标文件失败: %s" % e)
         return {}
-    samples = d.get('samples') if isinstance(d, dict) else d
+    samples = d.get("samples") if isinstance(d, dict) else d
     out = {}
     if isinstance(samples, list):
         for s in samples:
-            rid = s.get('report_id') or ''
+            rid = s.get("report_id") or ""
             if rid:
                 out[rid] = normalize_resume(s)
-    print('  续标文件里有 %d 份' % len(out))
+    print("  续标文件里有 %d 份" % len(out))
     return out
 
 
@@ -311,10 +336,10 @@ def js_json(obj):
     必须转义 '</'，否则项目名里一旦出现 '</script>' 之类的文本，
     整个页面会在那里被提前截断，而且报错信息完全看不出原因。
     """
-    return json.dumps(obj, ensure_ascii=False).replace('</', '<\\/')
+    return json.dumps(obj, ensure_ascii=False).replace("</", "<\\/")
 
 
-HTML_TPL = r'''<!DOCTYPE html>
+HTML_TPL = r"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -875,7 +900,7 @@ maskInfo();
 </script>
 </body>
 </html>
-'''
+"""
 
 
 def main():
@@ -883,22 +908,27 @@ def main():
 
     if args.predictions:
         src = items_from_predictions(args.predictions)
-        print('预测文件: %s  样本 %d' % (args.predictions, len(src)))
+        print("预测文件: %s  样本 %d" % (args.predictions, len(src)))
     elif args.artifacts:
-        parser_mod = load_module('04_parse_predictions.py', 'p04_for32')
+        parser_mod = load_module("04_parse_predictions.py", "p04_for32")
         if parser_mod is None:
-            print('!! 找不到 04_parse_predictions.py')
+            print("!! 找不到 04_parse_predictions.py")
             sys.exit(1)
         src = items_from_artifacts(args.artifacts, parser_mod)
-        print('artifacts: %s  样本 %d（无 flag 预填）' % (args.artifacts, len(src)))
+        print("artifacts: %s  样本 %d（无 flag 预填）" % (args.artifacts, len(src)))
     else:
-        print('需要 --predictions 或 --artifacts')
+        print("需要 --predictions 或 --artifacts")
         sys.exit(1)
 
-    imgs = sorted([f for f in glob.glob(os.path.join(args.images, '*'))
-                   if os.path.isfile(f) and f.lower().endswith(IMG_EXT)])
+    imgs = sorted(
+        [
+            f
+            for f in glob.glob(os.path.join(args.images, "*"))
+            if os.path.isfile(f) and f.lower().endswith(IMG_EXT)
+        ]
+    )
     if not imgs:
-        print('%s 下没有图片' % args.images)
+        print("%s 下没有图片" % args.images)
         sys.exit(1)
 
     # 按文件名（忽略扩展名、忽略 _masked 等后缀）匹配预测
@@ -914,7 +944,7 @@ def main():
         key = norm_stem(stem)
         # 同一份报告既有原图又有脱敏图时，只保留一张（优先已脱敏的）
         if key in seen:
-            if '_masked' in name.lower() and '_masked' not in seen[key][1].lower():
+            if "_masked" in name.lower() and "_masked" not in seen[key][1].lower():
                 all_imgs[seen[key][0]] = (f, name, stem, stem_map.get(key, []))
                 seen[key] = (seen[key][0], name)
             continue
@@ -922,24 +952,28 @@ def main():
         all_imgs.append((f, name, stem, stem_map.get(key, [])))
 
     matched = sum(1 for _, _, _, it in all_imgs if it)
-    print('图片 %d 张，其中 %d 张匹配到识别结果' % (len(all_imgs), matched))
+    print("图片 %d 张，其中 %d 张匹配到识别结果" % (len(all_imgs), matched))
     if matched == 0:
         print()
-        print('!! 一张都没匹配上。检查预测文件里的 image 字段与图片文件名是否一致。')
-        print('   预测里的 image 示例:', list(src.keys())[:3])
-        print('   图片目录里的名字示例:', [n for _, n, _, _ in all_imgs][:3])
+        print("!! 一张都没匹配上。检查预测文件里的 image 字段与图片文件名是否一致。")
+        print("   预测里的 image 示例:", list(src.keys())[:3])
+        print("   图片目录里的名字示例:", [n for _, n, _, _ in all_imgs][:3])
         sys.exit(1)
 
     # 分批
     if args.limit and args.limit > 0:
         start = args.batch * args.limit
-        batch_imgs = all_imgs[start:start + args.limit]
+        batch_imgs = all_imgs[start : start + args.limit]
         if not batch_imgs:
-            print('第 %d 批为空（总共 %d 张，每批 %d）'
-                  % (args.batch, len(all_imgs), args.limit))
+            print(
+                "第 %d 批为空（总共 %d 张，每批 %d）"
+                % (args.batch, len(all_imgs), args.limit)
+            )
             sys.exit(1)
-        print('分批：第 %d 批，取第 %d-%d 张，共 %d 张'
-              % (args.batch, start + 1, start + len(batch_imgs), len(batch_imgs)))
+        print(
+            "分批：第 %d 批，取第 %d-%d 张，共 %d 张"
+            % (args.batch, start + 1, start + len(batch_imgs), len(batch_imgs))
+        )
     else:
         batch_imgs = all_imgs
 
@@ -955,72 +989,85 @@ def main():
         ritems = []
         for it in items:
             ri = to_review_item(it, stem, prev_flags)
-            n_merged += 1 if ri['merged'] else 0
-            n_changed += 1 if ri['changed'] else 0
-            if args.fix_conflicts and ri['conflict']:
-                fixed.append((stem, ri['name'], ri['value'], ri['range'],
-                              ri['flag'], ri['auto']))
-                ri['flag'] = ri['auto']
-                ri['conflict'] = False
+            n_merged += 1 if ri["merged"] else 0
+            n_changed += 1 if ri["changed"] else 0
+            if args.fix_conflicts and ri["conflict"]:
+                fixed.append(
+                    (stem, ri["name"], ri["value"], ri["range"], ri["flag"], ri["auto"])
+                )
+                ri["flag"] = ri["auto"]
+                ri["conflict"] = False
             ritems.append(ri)
-        images_payload.append({
-            'name': name,
-            'stem': stem,
-            'short': re.sub(r'^TempDragFile_', '', stem),
-            'mime_data': 'data:%s;base64,%s' % (mime, b64),
-            'items': ritems,
-        })
+        images_payload.append(
+            {
+                "name": name,
+                "stem": stem,
+                "short": re.sub(r"^TempDragFile_", "", stem),
+                "mime_data": "data:%s;base64,%s" % (mime, b64),
+                "items": ritems,
+            }
+        )
         if stem in resume:
             resume_payload[name] = resume[stem]
 
-    html = HTML_TPL.replace('__IMAGES__', js_json(images_payload))
-    html = html.replace('__RESUME__', js_json(resume_payload))
+    html = HTML_TPL.replace("__IMAGES__", js_json(images_payload))
+    html = html.replace("__RESUME__", js_json(resume_payload))
 
     os.makedirs(args.out_dir, exist_ok=True)
-    os.makedirs(os.path.join(args.out_dir, 'output'), exist_ok=True)
-    out_name = args.out_name or 'review_tool.html'
+    os.makedirs(os.path.join(args.out_dir, "output"), exist_ok=True)
+    out_name = args.out_name or "review_tool.html"
     out = os.path.join(args.out_dir, out_name)
-    with open(out, 'w', encoding='utf-8') as fp:
+    with open(out, "w", encoding="utf-8") as fp:
         fp.write(html)
 
-    n_items = sum(len(p['items']) for p in images_payload)
-    n_prefilled = sum(1 for p in images_payload for it in p['items']
-                      if it['flag'] in ('normal', 'abnormal'))
-    n_lowconf = sum(1 for p in images_payload for it in p['items']
-                    if it['conf'] == 'low')
-    n_unknown = sum(1 for p in images_payload for it in p['items']
-                    if not it['judged'])
+    n_items = sum(len(p["items"]) for p in images_payload)
+    n_prefilled = sum(
+        1
+        for p in images_payload
+        for it in p["items"]
+        if it["flag"] in ("normal", "abnormal")
+    )
+    n_lowconf = sum(
+        1 for p in images_payload for it in p["items"] if it["conf"] == "low"
+    )
+    n_unknown = sum(1 for p in images_payload for it in p["items"] if not it["judged"])
 
     print()
-    print('=' * 60)
-    print('复核工具已生成')
-    print('=' * 60)
-    print('  %s  (%.1f MB)' % (out, os.path.getsize(out) / 1024 / 1024))
-    print('  样本 %d 份，项目 %d 个' % (len(images_payload), n_items))
-    print('  异常栏已预填 %d 个（规则高置信，扫一眼确认即可）' % n_prefilled)
-    print('  需人工判 %d 个（低置信 %d + 拒判 %d）' % (n_lowconf + n_unknown,
-                                                n_lowconf, n_unknown))
+    print("=" * 60)
+    print("复核工具已生成")
+    print("=" * 60)
+    print("  %s  (%.1f MB)" % (out, os.path.getsize(out) / 1024 / 1024))
+    print("  样本 %d 份，项目 %d 个" % (len(images_payload), n_items))
+    print("  异常栏已预填 %d 个（规则高置信，扫一眼确认即可）" % n_prefilled)
+    print(
+        "  需人工判 %d 个（低置信 %d + 拒判 %d）"
+        % (n_lowconf + n_unknown, n_lowconf, n_unknown)
+    )
     if n_merged:
-        print('  沿用上次人工标注 %d 个 flag' % n_merged)
+        print("  沿用上次人工标注 %d 个 flag" % n_merged)
     if n_changed:
-        print('  %d 个项的值被解析器修正过（行号旁有 ↻，悬停可看新旧值）' % n_changed)
+        print("  %d 个项的值被解析器修正过（行号旁有 ↻，悬停可看新旧值）" % n_changed)
     if fixed:
         print()
-        print('  已按参考区间自动修正 %d 项与区间矛盾的旧标注：' % len(fixed))
+        print("  已按参考区间自动修正 %d 项与区间矛盾的旧标注：" % len(fixed))
         for stem, nm, val, rng, was, now in fixed:
-            print('    %-20s %-22s 值=%-8s 区间=%-12s %s → %s'
-                  % (stem.replace('TempDragFile_', '')[:18], nm, val, rng, was, now))
+            print(
+                "    %-20s %-22s 值=%-8s 区间=%-12s %s → %s"
+                % (stem.replace("TempDragFile_", "")[:18], nm, val, rng, was, now)
+            )
     if resume_payload:
-        print('  从续标文件恢复了 %d 份' % len(resume_payload))
+        print("  从续标文件恢复了 %d 份" % len(resume_payload))
     print()
-    print('用法：')
-    print('  1. 浏览器打开，橙色/黄色/蓝色的行是重点')
-    print('  2. 改错、补漏、确认「异常」栏')
-    print('  3. 每敲一次自动存本地，关掉再开能恢复')
-    print('  4. 全部标完点「导出全部标注」→ 一个 JSON')
-    print('  5. python tools\\23_gold_from_annotation.py --src <下载目录> '
-          '--out <数据目录>\\自采数据集')
+    print("用法：")
+    print("  1. 浏览器打开，橙色/黄色/蓝色的行是重点")
+    print("  2. 改错、补漏、确认「异常」栏")
+    print("  3. 每敲一次自动存本地，关掉再开能恢复")
+    print("  4. 全部标完点「导出全部标注」→ 一个 JSON")
+    print(
+        "  5. python tools\\23_gold_from_annotation.py --src <下载目录> "
+        "--out <数据目录>\\自采数据集"
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}报告详情 - 体检报告系统{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-head">
+    <div class="card-head-main">
+      <h1>报告 {{ report.report_no|default:report.id }}</h1>
+      <p class="muted">
+        日期：{{ report.report_date|date:"Y-m-d"|default:"未提供" }}
+        机构：{{ report.institution|default:"未提供" }}
+        状态：{{ report.get_status_display }}
+      </p>
+    </div>
+    <a class="btn back-btn" href="{% url 'reports:report_list' %}">返回列表</a>
+  </div>
+  {% if can_reprocess %}
+  <form method="post" action="{% url 'reports:reprocess' report.id %}" class="inline-form">
+    {% csrf_token %}
+    <button type="submit" class="btn secondary"
+            onclick="return confirm('重新处理会覆盖现有指标与解读，确定继续？')">
+      重新处理
+    </button>
+  </form>
+  {% endif %}
+</div>
+
+{% if report.status != "done" %}
+<div class="card">
+  <h2>处理进度</h2>
+  {% if tasks %}
+  <table>
+    <thead>
+      <tr>
+        <th>环节</th>
+        <th>状态</th>
+        <th>尝试</th>
+        <th>开始</th>
+        <th>结束</th>
+        <th>说明</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tasks %}
+      <tr>
+        <td>{{ t.get_task_type_display }}</td>
+        <td>
+          {% if t.status == "done" %}
+            <span class="tag ok">{{ t.get_status_display }}</span>
+          {% elif t.status == "failed" %}
+            <span class="tag abnormal">{{ t.get_status_display }}</span>
+          {% elif t.status == "running" %}
+            <span class="tag running">{{ t.get_status_display }}</span>
+          {% else %}
+            <span class="tag">{{ t.get_status_display }}</span>
+          {% endif %}
+        </td>
+        <td>{{ t.attempts }} / {{ t.max_attempts }}</td>
+        <td>{{ t.started_at|date:"H:i:s"|default:"-" }}</td>
+        <td>{{ t.finished_at|date:"H:i:s"|default:"-" }}</td>
+        <td class="muted">{{ t.error_msg|default:"-"|truncatechars:60 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">尚未进入队列。确认 worker 已启动：python manage.py run_worker</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if explanation %}
+<div class="card">
+  <h2>解读</h2>
+  <p class="muted">
+    {% if explanation.tier == 'template' %}
+      {# 未接模型时按模板整段输出，属于正常方式，不标成降级 #}
+      <span class="tag">模板输出</span>
+    {% else %}
+      {{ explanation.get_tier_display }}
+      {% if explanation.model %}模型 {{ explanation.model }}{% endif %}
+      {% if explanation.guard_status == 'degraded' %}
+        <span class="tag moderate">校验未通过</span>
+      {% endif %}
+    {% endif %}
+    共 {{ explanation.n_items }} 项，异常 {{ explanation.n_abnormal }} 项，
+    无法判断 {{ explanation.n_unknown }} 项
+  </p>
+  {% if explanation.tier != 'template' and explanation.guard_detail %}
+    <p class="muted">降级原因：{{ explanation.guard_detail }}</p>
+  {% endif %}
+  {% for s in explanation.sections.all %}
+  <div class="section">
+    <div class="stitle">{{ s.title }}</div>
+    <div class="sbody">{{ s.body }}</div>
+    {% if s.cite_items %}
+      <div class="muted">涉及：{{ s.cite_items|cut:"," }}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <p class="muted">该报告尚未生成解读。</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>指标明细</h2>
+  {% if items %}
+  <table>
+    <thead>
+      <tr>
+        <th>项目</th>
+        <th>结果</th>
+        <th>单位</th>
+        <th>参考范围</th>
+        <th>判定</th>
+        <th>程度</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td>{{ it.name_raw }}</td>
+        <td>{{ it.value_raw|default:"-" }}</td>
+        <td>{{ it.unit|default:"-" }}</td>
+        <td>{{ it.ref_raw|default:"-" }}</td>
+        <td>
+          {% if it.flag == "abnormal" %}
+            <span class="tag abnormal">异常</span>
+          {% elif it.flag == "unknown" %}
+            <span class="tag unknown">无法判断</span>
+          {% elif it.flag == "normal" %}
+            <span class="tag">正常</span>
+          {% else %}-{% endif %}
+        </td>
+        <td>
+          {% if it.severity %}
+            <span class="tag {{ it.severity }}">{{ it.get_severity_display }}</span>
+          {% else %}-{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">尚未解析出指标。</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>原始图片</h2>
+  {% if pages %}
+    {% for p in pages %}
+    <p class="muted">第 {{ p.page_no }} 页（{{ p.get_ocr_status_display }}）</p>
+    {% if p.image_path %}
+      <img class="page-thumb" loading="lazy"
+           src="{% url 'reports:report_image' report.id p.page_no %}"
+           alt="第 {{ p.page_no }} 页">
+    {% else %}
+      <p class="muted">原图已按保留期清理。</p>
+    {% endif %}
+    {% endfor %}
+  {% else %}
+    <p class="muted">无页记录。</p>
+  {% endif %}
+</div>
+{% endblock %}

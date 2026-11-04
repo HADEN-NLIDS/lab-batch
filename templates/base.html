@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}体检报告系统{% endblock %}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: #f5f6f8; color: #222; line-height: 1.6;
+    }
+    header {
+      background: #1f2937; color: #fff; padding: 12px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 8px;
+    }
+    header a { color: #cbd5e1; text-decoration: none; margin-right: 16px; }
+    header a:hover { color: #fff; }
+    header .brand { color: #fff; font-weight: 600; }
+    main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; }
+    .card {
+      background: #fff; border-radius: 8px; padding: 18px 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 16px;
+    }
+    h1 { font-size: 20px; margin: 0 0 16px; }
+    h2 { font-size: 16px; margin: 20px 0 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e5e7eb; }
+    th { background: #f9fafb; font-weight: 600; color: #374151; }
+    tr:hover td { background: #fafafa; }
+    .btn {
+      display: inline-block; padding: 7px 14px; border-radius: 6px;
+      background: #2563eb; color: #fff; text-decoration: none;
+      border: none; cursor: pointer; font-size: 14px;
+    }
+    .btn:hover { background: #1d4ed8; }
+    .btn.secondary { background: #e5e7eb; color: #374151; }
+    .btn.secondary:hover { background: #d1d5db; }
+    .msg { padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 14px; }
+    .msg.success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+    .msg.warning { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+    .msg.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    .muted { color: #6b7280; font-size: 13px; }
+    .tag {
+      display: inline-block; padding: 1px 8px; border-radius: 10px;
+      font-size: 12px; background: #e5e7eb; color: #374151;
+    }
+    .tag.abnormal { background: #fef2f2; color: #991b1b; }
+    .tag.unknown { background: #f3f4f6; color: #6b7280; }
+    .tag.ok { background: #ecfdf5; color: #065f46; }
+    .tag.running { background: #eff6ff; color: #1d4ed8; }
+    .tag.critical { background: #7f1d1d; color: #fff; }
+    .tag.marked { background: #dc2626; color: #fff; }
+    .tag.moderate { background: #f59e0b; color: #fff; }
+    .tag.mild { background: #fbbf24; color: #422006; }
+    .section { margin-bottom: 14px; }
+    .section .stitle { font-weight: 600; margin-bottom: 4px; }
+    .section .sbody { white-space: pre-wrap; }
+    input[type=file] { display: block; margin: 6px 0 14px; }
+    label { font-weight: 600; font-size: 14px; }
+    .login-box { max-width: 360px; margin: 80px auto; }
+    .login-box input[type=text], .login-box input[type=password] {
+      width: 100%; padding: 8px 10px; margin: 4px 0 12px;
+      border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;
+    }
+    .page-thumb { max-width: 100%; border: 1px solid #e5e7eb; border-radius: 6px; }
+    .pager { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+    .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    .card-head-main { min-width: 0; }
+    .card-head-main h1 { margin-bottom: 8px; }
+    .back-btn { flex-shrink: 0; padding: 9px 18px; font-weight: 600; }
+    .user-menu { position: relative; display: inline-block; margin-left: 4px; }
+    .user-name {
+      color: #cbd5e1; padding: 2px 0; cursor: default;
+      border-bottom: 1px dashed #64748b;
+    }
+    .user-menu:hover .user-name, .user-menu:focus-within .user-name { color: #fff; }
+    .logout-form {
+      position: absolute; right: 0; top: 100%; margin: 0; padding-top: 8px;
+      z-index: 20; opacity: 0; visibility: hidden;
+      transition: opacity .12s ease, visibility .12s;
+    }
+    .user-menu:hover .logout-form,
+    .user-menu:focus-within .logout-form { opacity: 1; visibility: visible; }
+    .logout-link {
+      padding: 7px 16px; border-radius: 6px; border: none; cursor: pointer;
+      background: #dc2626; color: #fff; font-size: 13px; white-space: nowrap;
+    }
+    .logout-link:hover { background: #b91c1c; }
+    /* 触摸设备没有悬停，退出按钮常驻显示 */
+    @media (hover: none) {
+      .logout-form { position: static; opacity: 1; visibility: visible; padding-top: 0; }
+    }
+    .inline-form { display: inline; }
+    @media (max-width: 600px) {
+      main { padding: 12px 10px 40px; }
+      th, td { padding: 6px 6px; font-size: 13px; }
+      header { padding: 10px 12px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="brand">体检报告系统</span>
+    <nav>
+      {% if user.is_authenticated %}
+        <a href="{% url 'reports:report_list' %}">报告</a>
+        {% if user.role == 'manager' or user.role == 'admin' %}
+          <a href="{% url 'reports:upload' %}">批量上传</a>
+          <a href="{% url 'stats:dashboard' %}">群体统计</a>
+          <a href="/admin/">管理后台</a>
+        {% endif %}
+        <span class="user-menu">
+          <span class="user-name">{{ user.display_name|default:user.username }}</span>
+          <form class="logout-form" method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="logout-link">退出登录</button>
+          </form>
+        </span>
+      {% endif %}
+    </nav>
+  </header>
+  <main>
+    {% if messages %}
+      {% for m in messages %}
+        <div class="msg {{ m.tags }}">{{ m }}</div>
+      {% endfor %}
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

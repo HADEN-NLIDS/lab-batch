@@ -10,6 +10,16 @@ bj/
 artifacts*/
 *.zip
 
+# ---- 图片一律不入库（报告原图未脱敏，泄露即个人信息事故）----
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.tif
+*.tiff
+*.webp
+*.gif
+
 # ---- 内部文档 ----
 docs/
 
@@ -19,9 +29,30 @@ parse_report*.md
 vocab*.json
 course_ocr_items.json
 
+# ---- 按 README 流程跑出来的产物（含检验数值，不得入库）----
+flagged*.jsonl
+explanations*.jsonl
+explain_check*.md
+*.db
+
 # ---- 临时调试输出 ----
 _*
 _raw_debug.txt
+
+# ---- 本地配置（含数据库密码等凭据，不得提交）----
+.env
+.env.local
+
+# ---- 安装包（体积大，不入库）----
+*.msi
+*.exe
+
+# ---- 处理中间产物 ----
+var/
+
+# ---- Django 运行产物 ----
+media/
+staticfiles/
 
 # ---- Python ----
 __pycache__/

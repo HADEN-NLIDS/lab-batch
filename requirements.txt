@@ -1,2 +1,8 @@
-paddleocr[doc-parser]
-pillow
+paddlepaddle-gpu==3.3.0
+paddleocr==3.7.0
+paddlex[ocr]==3.7.2
+numpy==2.2.6
+opencv-contrib-python==4.10.0.84
+pillow==12.3.0
+modelscope==1.40.2
+setuptools

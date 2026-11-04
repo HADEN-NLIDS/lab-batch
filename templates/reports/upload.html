@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}批量上传 - 体检报告系统{% endblock %}
+{% block content %}
+<div class="msg warning">
+  文件名决定报告归属。请命名为「工号_姓名」，例如 E001_张三.jpg。
+  同一工号的多张图会被当作同一份报告的多页。
+  像 TempDragFile_20261022_094238.png 或 微信图片_001.png 这类默认名，
+  会被解析成同一个工号，不同人的报告会混在一起。
+</div>
+<div class="card">
+  <h1>批量上传</h1>
+  <p class="muted">
+    也可直接上传 ZIP，包内按同样规则命名。
+  </p>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <label for="id_images">图片文件（可多选）</label>
+    <input type="file" name="images" id="id_images" multiple
+           accept=".jpg,.jpeg,.png,.bmp,.tif,.tiff,.webp">
+    <label for="id_archives">压缩包（可多选，仅 ZIP）</label>
+    <input type="file" name="archives" id="id_archives" multiple accept=".zip">
+    <button type="submit" class="btn">开始上传</button>
+  </form>
+</div>
+{% endblock %}
