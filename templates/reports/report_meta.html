@@ -23,6 +23,13 @@
       重新处理
     </button>
   </form>
+  <form method="post" action="{% url 'reports:delete_report' report.id %}" class="inline-form">
+    {% csrf_token %}
+    <button type="submit" class="btn secondary"
+            onclick="return confirm('删除后该报告不再出现在列表中，原图会在保留期后清理。确定删除？')">
+      删除报告
+    </button>
+  </form>
   {% endif %}
 </div>
 

@@ -58,7 +58,7 @@
     .section .stitle { font-weight: 600; margin-bottom: 4px; }
     .section .sbody { white-space: pre-wrap; }
     input[type=file] { display: block; margin: 6px 0 14px; }
-    input[type=text] {
+    input[type=text], input[type=password] {
       padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px;
       font-size: 14px;
     }
@@ -70,6 +70,10 @@
       border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;
     }
     .page-thumb { max-width: 100%; border: 1px solid #e5e7eb; border-radius: 6px; }
+    .pending-thumb {
+      max-width: 72px; max-height: 96px; border: 1px solid #e5e7eb;
+      border-radius: 4px; display: block; object-fit: cover;
+    }
     .pager { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
     .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
     .card-head-main { min-width: 0; }
@@ -85,14 +89,18 @@
       position: absolute; right: 0; top: 100%; margin: 0; padding-top: 8px;
       z-index: 20; opacity: 0; visibility: hidden;
       transition: opacity .12s ease, visibility .12s;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
     }
     .user-menu:hover .logout-form,
     .user-menu:focus-within .logout-form { opacity: 1; visibility: visible; }
     .logout-link {
-      padding: 7px 16px; border-radius: 6px; border: none; cursor: pointer;
-      background: #dc2626; color: #fff; font-size: 13px; white-space: nowrap;
+      display: block; padding: 7px 16px; border-radius: 6px; border: none;
+      cursor: pointer; background: #dc2626; color: #fff; font-size: 13px;
+      white-space: nowrap; text-decoration: none; text-align: center;
     }
     .logout-link:hover { background: #b91c1c; }
+    .pwd-link { background: #374151; }
+    .pwd-link:hover { background: #1f2937; }
     /* 触摸设备没有悬停，退出按钮常驻显示 */
     @media (hover: none) {
       .logout-form { position: static; opacity: 1; visibility: visible; padding-top: 0; }
@@ -119,10 +127,13 @@
         {% endif %}
         <span class="user-menu">
           <span class="user-name">{{ user.display_name|default:user.username }}</span>
-          <form class="logout-form" method="post" action="{% url 'logout' %}">
-            {% csrf_token %}
-            <button type="submit" class="logout-link">退出登录</button>
-          </form>
+          <div class="logout-form">
+            <a class="logout-link pwd-link" href="{% url 'password_change' %}">修改密码</a>
+            <form method="post" action="{% url 'logout' %}">
+              {% csrf_token %}
+              <button type="submit" class="logout-link">退出登录</button>
+            </form>
+          </div>
         </span>
       {% endif %}
     </nav>

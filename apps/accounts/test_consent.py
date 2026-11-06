@@ -89,3 +89,68 @@ class ConsentGateTest(TestCase):
         self.client.post('/consent/', {'next': '/reports/'})
         self.assertEqual(Consent.objects.filter(
             user=self.employee, revoked_at__isnull=True).count(), 1)
+
+    def test_revoke_marks_row_and_blocks_access(self):
+        Consent.objects.create(tenant_id=self.org.id, user=self.employee,
+                               consent_type='processing',
+                               granted_at=timezone.now())
+        self.client.force_login(self.employee)
+
+        resp = self.client.post('/consent/revoke/')
+        self.assertEqual(resp.status_code, 302)
+
+        row = Consent.objects.get(user=self.employee)
+        self.assertIsNotNone(row.revoked_at)
+
+        # 撤回后重新被拦
+        resp2 = self.client.get('/reports/')
+        self.assertEqual(resp2.status_code, 302)
+        self.assertIn('/consent/', resp2['Location'])
+
+    def test_revoke_keeps_history_row(self):
+        Consent.objects.create(tenant_id=self.org.id, user=self.employee,
+                               consent_type='processing',
+                               granted_at=timezone.now())
+        self.client.force_login(self.employee)
+        self.client.post('/consent/revoke/')
+
+        # 撤回是标记而不是删除
+        self.assertEqual(Consent.objects.filter(user=self.employee).count(), 1)
+
+    def test_resign_after_revoke_restores_access(self):
+        Consent.objects.create(tenant_id=self.org.id, user=self.employee,
+                               consent_type='processing',
+                               granted_at=timezone.now())
+        self.client.force_login(self.employee)
+        self.client.post('/consent/revoke/')
+        self.client.post('/consent/', {'next': '/reports/'})
+
+        self.assertEqual(self.client.get('/reports/').status_code, 200)
+        # 旧记录保留，新记录新增，一共两条
+        self.assertEqual(Consent.objects.filter(user=self.employee).count(), 2)
+
+    def test_revoke_without_consent_is_safe(self):
+        self.client.force_login(self.employee)
+        resp = self.client.post('/consent/revoke/')
+
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(Consent.objects.filter(user=self.employee).count(), 0)
+
+    def test_revoke_rejects_get(self):
+        self.client.force_login(self.employee)
+        resp = self.client.get('/consent/revoke/')
+
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp['Location'], '/consent/')
+
+    def test_revoke_writes_audit_log(self):
+        from apps.core.models import AuditLog
+
+        Consent.objects.create(tenant_id=self.org.id, user=self.employee,
+                               consent_type='processing',
+                               granted_at=timezone.now())
+        self.client.force_login(self.employee)
+        self.client.post('/consent/revoke/')
+
+        self.assertTrue(AuditLog.objects.filter(
+            user_id=self.employee.id, action='revoke').exists())

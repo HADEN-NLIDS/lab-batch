@@ -6,4 +6,5 @@ app_name = 'accounts'
 
 urlpatterns = [
     path('', views.consent_view, name='consent'),
+    path('revoke/', views.revoke_consent, name='revoke'),
 ]

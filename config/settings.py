@@ -131,3 +131,57 @@ SESSION_COOKIE_AGE = 8 * 60 * 60
 
 # 群体统计的最小分组样本量，低于该值不展示
 MIN_GROUP_SIZE = int(os.environ.get('MIN_GROUP_SIZE', '10'))
+
+# ---------------------------------------------------------------
+# 日志
+# 控制台看得到，同时落盘到 var/logs/app.log，按 10 MB 轮转保留 5 份。
+# var/ 已在 .gitignore 中排除，日志不会误传。
+# ---------------------------------------------------------------
+LOG_DIR = BASE_DIR / 'var' / 'logs'
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+LOG_LEVEL = os.environ.get('DJANGO_LOG_LEVEL', 'INFO')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'standard': {
+            'format': '{levelname} {asctime} {name} {message}',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'standard',
+        },
+        'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOG_DIR / 'app.log'),
+            'maxBytes': 10 * 1024 * 1024,
+            'backupCount': 5,
+            'encoding': 'utf-8',
+            'formatter': 'standard',
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': LOG_LEVEL,
+    },
+    'loggers': {
+        # 请求异常与服务器错误，这些是排查问题的主要入口
+        'django.request': {
+            'handlers': ['console', 'file'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        # 项目自身的日志，audit 写入失败、任务异常等都走这里
+        'apps': {
+            'handlers': ['console', 'file'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+    },
+}

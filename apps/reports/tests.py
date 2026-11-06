@@ -260,6 +260,78 @@ class ViewPermissionTest(TestCase):
         self.assertEqual(resp.status_code, 404)
 
 
+class ReportDeleteTest(TestCase):
+    """软删除：只标记不物理删除。"""
+
+    def setUp(self):
+        self.org = Organization.objects.create(name='测试企业', code='t3')
+        self.subject = Subject.objects.create(
+            tenant_id=self.org.id, subject_key='sk_del')
+        self.manager = User.objects.create_user(
+            username='M003', password='x', tenant=self.org,
+            role=User.ROLE_MANAGER)
+        self.employee = User.objects.create_user(
+            username='E003', password='x', tenant=self.org,
+            role=User.ROLE_EMPLOYEE, subject=self.subject)
+        self.report = Report.objects.create(
+            tenant_id=self.org.id, subject=self.subject, report_no='E003',
+            schema_version='1')
+
+        # 员工未签同意会被中间件先拦到同意页，测不到删除权限
+        from django.utils import timezone as tz
+        from apps.accounts.models import Consent
+        Consent.objects.create(
+            tenant_id=self.org.id, user=self.employee,
+            consent_type='processing', granted_at=tz.now())
+
+    def test_delete_marks_not_removes(self):
+        self.client.force_login(self.manager)
+        resp = self.client.post('/reports/%d/delete/' % self.report.id)
+
+        self.assertEqual(resp.status_code, 302)
+        self.assertIsNotNone(
+            Report.objects.get(pk=self.report.id).deleted_at)
+
+    def test_deleted_report_hidden_from_list(self):
+        self.client.force_login(self.manager)
+        self.client.post('/reports/%d/delete/' % self.report.id)
+
+        resp = self.client.get('/reports/')
+        self.assertNotContains(resp, '#%d' % self.report.id)
+
+    def test_deleted_report_detail_is_404(self):
+        self.client.force_login(self.manager)
+        self.client.post('/reports/%d/delete/' % self.report.id)
+
+        resp = self.client.get('/reports/%d/' % self.report.id)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_employee_cannot_delete(self):
+        self.client.force_login(self.employee)
+        resp = self.client.post('/reports/%d/delete/' % self.report.id)
+
+        self.assertEqual(resp.status_code, 403)
+        self.assertIsNone(
+            Report.objects.get(pk=self.report.id).deleted_at)
+
+    def test_get_does_not_delete(self):
+        self.client.force_login(self.manager)
+        resp = self.client.get('/reports/%d/delete/' % self.report.id)
+
+        self.assertEqual(resp.status_code, 302)
+        self.assertIsNone(
+            Report.objects.get(pk=self.report.id).deleted_at)
+
+    def test_delete_writes_audit(self):
+        from apps.core.models import AuditLog
+
+        self.client.force_login(self.manager)
+        self.client.post('/reports/%d/delete/' % self.report.id)
+
+        self.assertTrue(AuditLog.objects.filter(
+            action='delete', target_id=self.report.id).exists())
+
+
 class TwoStepUploadTest(TestCase):
     """两步上传：暂存不建报告，确认后才入库。"""
 

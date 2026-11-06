@@ -24,15 +24,23 @@
 输出内容仅供健康科普参考，不构成诊断，不能替代医生面诊。如有异常或身体不适，请及时就医。
   </div>
 
-  <form method="post" style="margin-top: 20px;">
-    {% csrf_token %}
-    <input type="hidden" name="next" value="{{ next }}">
-    {% if already %}
-      <p class="muted">您已签署过本版本同意书。</p>
+  {% if already %}
+    <p class="muted">您已签署过本版本同意书。</p>
+    <div class="pager">
       <a class="btn" href="{{ next }}">继续</a>
-    {% else %}
+    </div>
+    <form method="post" action="{% url 'accounts:revoke' %}"
+          style="margin-top: 20px;"
+          onsubmit="return confirm('撤回后系统不再处理您的新报告，确定撤回？')">
+      {% csrf_token %}
+      <button type="submit" class="btn secondary">撤回授权</button>
+    </form>
+  {% else %}
+    <form method="post" style="margin-top: 20px;">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
       <button type="submit" class="btn">我已阅读并同意</button>
-    {% endif %}
-  </form>
+    </form>
+  {% endif %}
 </div>
 {% endblock %}

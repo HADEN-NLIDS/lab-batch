@@ -9,6 +9,7 @@ from django.core.paginator import Paginator
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.core.audit import log_action
 from apps.reports.forms import UploadForm
@@ -120,6 +121,33 @@ def reprocess(request, pk):
     log_action(request, 'reprocess', 'report', report.id)
     messages.success(request, '已重新排队，等待 worker 处理')
     return redirect('reports:report_detail', pk=pk)
+
+
+@login_required
+def delete_report(request, pk):
+    """软删除一份报告。仅管理层与运维可用，只接受 POST。
+
+    只写 deleted_at，不物理删除。原图与指标保留到保留期结束，
+    由 purge_images 统一清理。
+    """
+    if not _can_manage(request.user):
+        raise PermissionDenied('无权删除报告')
+
+    report = get_object_or_404(
+        Report, pk=pk, tenant_id=request.tenant.id,
+        deleted_at__isnull=True)
+
+    if request.method != 'POST':
+        return redirect('reports:report_detail', pk=pk)
+
+    report.deleted_at = timezone.now()
+    report.save(update_fields=['deleted_at'])
+
+    log_action(request, 'delete', 'report', report.id,
+               '工号 %s' % report.report_no)
+    messages.success(
+        request, '已删除。原图会在保留期结束后由 purge_images 清理。')
+    return redirect('reports:report_list')
 
 
 @login_required
@@ -272,3 +300,22 @@ def assign_pending(request, pk):
             messages.error(request, err)
 
     return render(request, 'reports/pending_assign.html', {'file': pending})
+
+
+@login_required
+def pending_image(request, pk):
+    """待匹配文件的预览图。
+
+    暂存的图片还没入库，但仍属个人健康资料，只对管理层与运维开放。
+    """
+    if not _can_manage(request.user):
+        raise PermissionDenied('无权查看')
+
+    pending = get_object_or_404(
+        PendingFile, pk=pk, tenant_id=request.tenant.id)
+
+    abs_path = os.path.join(settings.MEDIA_ROOT, pending.image_path)
+    if not os.path.exists(abs_path):
+        raise Http404('暂存文件已清理')
+
+    return FileResponse(open(abs_path, 'rb'))

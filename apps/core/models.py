@@ -36,6 +36,8 @@ class AuditLog(models.Model):
         ('assign', '指定工号'),
         ('reprocess', '重新处理'),
         ('consent', '签署同意'),
+        ('revoke', '撤回同意'),
+        ('password', '修改密码'),
     ]
 
     tenant_id = models.BigIntegerField()
