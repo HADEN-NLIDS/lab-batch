@@ -4,6 +4,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from apps.accounts.models import Consent
+from apps.core.audit import log_action
 
 CONSENT_VERSION = 'v1'
 
@@ -28,6 +29,8 @@ def consent_view(request):
                 consent_version=CONSENT_VERSION,
                 granted_at=timezone.now(),
             )
+            log_action(request, 'consent', 'consent', request.user.id,
+                       '版本 %s' % CONSENT_VERSION)
             messages.success(request, '已完成知情同意签署')
         return redirect(next_url)
 

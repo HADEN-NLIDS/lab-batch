@@ -10,6 +10,7 @@ from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
+from apps.core.audit import log_action
 from apps.reports.forms import UploadForm
 from apps.reports.models import PendingFile, Report
 from apps.reports.services import (assign_pending_file, confirm_upload,
@@ -68,6 +69,7 @@ def report_detail(request, pk):
     if _personal_only(request.user):
         if report.subject_id != request.user.subject_id:
             raise PermissionDenied('无权查看该报告')
+        log_action(request, 'view', 'report', report.id)
         return render(request, 'reports/report_detail.html', {
             'report': report,
             'pages': report.pages.order_by('page_no'),
@@ -78,6 +80,7 @@ def report_detail(request, pk):
         })
 
     # 管理层与运维只能看到处理状态与数量，不得查看具体指标与解读
+    log_action(request, 'view', 'report_meta', report.id)
     items = report.items.all()
     return render(request, 'reports/report_meta.html', {
         'report': report,
@@ -114,6 +117,7 @@ def reprocess(request, pk):
     report.save(update_fields=['status'])
     enqueue(report, 'ocr')
 
+    log_action(request, 'reprocess', 'report', report.id)
     messages.success(request, '已重新排队，等待 worker 处理')
     return redirect('reports:report_detail', pk=pk)
 
@@ -143,6 +147,8 @@ def report_image(request, pk, page_no):
     if not os.path.exists(abs_path):
         raise Http404('原图文件已清理')
 
+    log_action(request, 'export', 'report_image', report.id,
+               '第 %d 页' % page_no)
     return FileResponse(open(abs_path, 'rb'))
 
 
@@ -166,6 +172,9 @@ def upload(request):
                 messages.warning(request, warn)
             if not staged['batch']:
                 return redirect('reports:upload')
+            log_action(request, 'upload', 'batch', None,
+                       '暂存 %d 个文件，批次 %s'
+                       % (staged['staged'], staged['batch']))
             return redirect('%s?batch=%s' % (
                 reverse('reports:upload_confirm'), staged['batch']))
     else:
@@ -195,6 +204,9 @@ def upload_confirm(request):
                 assignments[f.filename] = value
         result = confirm_upload(batch, request.tenant, assignments)
 
+        log_action(request, 'confirm', 'batch', None,
+                   '批次 %s 建 %d 份报告，%d 个文件待匹配'
+                   % (batch, result['created'], len(result['pending'])))
         if result['created']:
             messages.success(request, '已创建 %d 份报告' % result['created'])
         if result['pending']:
@@ -253,6 +265,8 @@ def assign_pending(request, pk):
         else:
             ok, err = assign_pending_file(pending, request.tenant, emp)
             if ok:
+                log_action(request, 'assign', 'pending_file', pending.id,
+                           '归入工号 %s' % emp)
                 messages.success(request, '已归入工号 %s 的报告' % emp)
                 return redirect('reports:upload_pending')
             messages.error(request, err)

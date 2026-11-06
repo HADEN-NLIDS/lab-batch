@@ -3,9 +3,13 @@
 import io
 import zipfile
 
-from django.test import TestCase
+from django.contrib.auth.models import AnonymousUser
+from django.test import RequestFactory, TestCase
 from PIL import Image
 
+from apps.accounts.models import User
+from apps.core.audit import log_action
+from apps.core.models import AuditLog, Organization
 from apps.core.utils import make_subject_key, safe_extract_zip, validate_image
 
 
@@ -92,3 +96,49 @@ class SubjectKeyTest(TestCase):
 
     def test_key_is_truncated(self):
         self.assertEqual(len(make_subject_key('E001')), 24)
+
+
+class AuditLogTest(TestCase):
+    """审计日志的写入与跳过规则。"""
+
+    def setUp(self):
+        self.org = Organization.objects.create(name='测试企业', code='t1')
+        self.user = User.objects.create_user(
+            username='A001', password='x', tenant=self.org,
+            role=User.ROLE_ADMIN)
+
+    def _request(self, user, tenant):
+        request = RequestFactory().get('/reports/',
+                                       REMOTE_ADDR='192.0.2.10')
+        request.user = user
+        request.tenant = tenant
+        return request
+
+    def test_writes_row_with_context(self):
+        log_action(self._request(self.user, self.org),
+                   'view', 'report', 7, '测试记录')
+
+        row = AuditLog.objects.get()
+        self.assertEqual(row.action, 'view')
+        self.assertEqual(row.target_type, 'report')
+        self.assertEqual(row.target_id, 7)
+        self.assertEqual(row.detail, '测试记录')
+        self.assertEqual(row.tenant_id, self.org.id)
+        self.assertEqual(row.user_id, self.user.id)
+        self.assertEqual(row.ip, '192.0.2.10')
+
+    def test_skips_without_tenant(self):
+        result = log_action(self._request(AnonymousUser(), None), 'view')
+
+        self.assertIsNone(result)
+        self.assertEqual(AuditLog.objects.count(), 0)
+
+    def test_uses_forwarded_ip(self):
+        request = RequestFactory().get(
+            '/reports/', HTTP_X_FORWARDED_FOR='203.0.113.5, 10.0.0.1')
+        request.user = self.user
+        request.tenant = self.org
+
+        log_action(request, 'login')
+
+        self.assertEqual(AuditLog.objects.get().ip, '203.0.113.5')

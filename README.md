@@ -251,6 +251,26 @@ python manage.py create_employees --dry-run     # 预览
 python manage.py create_employees --password <统一初始密码>
 ```
 
+### 审计与合规
+
+登录、登出、上传、确认导入、查看报告、下载原图、重新处理、指定工号、
+签署知情同意，这些操作会往 `audit_log` 写一条记录，含操作人、动作、
+目标对象、说明与客户端 IP。
+
+写入失败不阻断业务。审计是旁路，不该因为它出错让用户正在做的事失败。
+没有租户上下文时跳过，比如登录页上的匿名请求。
+
+保留期由清理命令控制：
+
+```bash
+python manage.py purge_audit --days 7 --dry-run
+python manage.py purge_audit --days 7
+```
+
+知情同意单独存放在 `consent` 表，保留版本号与签署时间。员工首次登录时
+由中间件拦截，未签署无法查看报告。模型支持撤回（`revoked_at` 字段），
+撤回入口尚未做界面。
+
 ---
 
 ## 解读与护栏

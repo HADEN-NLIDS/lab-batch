@@ -19,8 +19,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--days', type=int, default=7,
                             help='保留天数，默认 7')
-        parser.add_argument('--dry', action='store_true',
-                            help='只统计，不实际删除')
+        parser.add_argument('--dry', '--dry-run', action='store_true',
+                            dest='dry', help='只统计，不实际删除')
 
     def handle(self, *args, **options):
         days = options['days']

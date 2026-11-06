@@ -27,10 +27,15 @@ class AuditLog(models.Model):
 
     ACTION_CHOICES = [
         ('login', '登录'),
+        ('logout', '登出'),
         ('view', '查看'),
         ('export', '导出'),
         ('delete', '删除'),
         ('upload', '上传'),
+        ('confirm', '确认导入'),
+        ('assign', '指定工号'),
+        ('reprocess', '重新处理'),
+        ('consent', '签署同意'),
     ]
 
     tenant_id = models.BigIntegerField()
